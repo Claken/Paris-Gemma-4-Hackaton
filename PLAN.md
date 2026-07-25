@@ -65,7 +65,7 @@ remboursement du prix du billet.
 
 ## P1 - Fiabilité
 
-- [x] Maintenir les 28 tests unitaires du routeur, des règles, du function
+- [x] Maintenir les 30 tests unitaires du routeur, des règles, du function
   calling et de la normalisation.
 - [x] Faire confirmer la référence de réservation avant de l'utiliser dans la
   lettre (`--booking-reference FQ7T2K` ou champ de l'interface).

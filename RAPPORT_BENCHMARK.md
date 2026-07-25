@@ -14,7 +14,7 @@ Plateforme : MacBook Pro `Mac17,9`, Apple M5 Pro 15 cœurs, 24 Go, macOS 26.5.2,
 Ollama 0.32.3 et Gemma 4 11,9B Q4_K_M. Le modèle annonce les capacités vision,
 tools et thinking.
 
-La suite fonctionnelle associée au benchmark passe désormais à **28/28 tests**,
+La suite fonctionnelle associée au benchmark passe désormais à **30/30 tests**,
 dont cinq tests ciblés sur le remboursement, le renoncement explicite et le
 routage de décision.
 
@@ -36,15 +36,20 @@ coefficient de variation de 2,8 %. Les trois passages ont obtenu :
 - même distance, même tranche de 250 € et même prudence rédactionnelle ;
 - aucune invention de formulaire pour la compagnie fictive.
 
+Un rerun d'intégration post-correctif a pris **49,29 s** avec le même résultat :
+deux outils Gemma, zéro rejet, source en ligne et qualification à 250 €
+potentiels. Il confirme l'ordre de grandeur, sans remplacer la série historique
+de trois mesures.
+
 Les branches courtes confirment le bénéfice du routage : 26,54 s pour un billet
 seul, qui s'arrête avant la recherche, et 28,49 s pour un retard inférieur à
 trois heures, qui s'arrête avant la rédaction. Le mode hors ligne complet prend
 47,44 s, proche du chemin en ligne.
 
-Ces mesures ont été prises avant l'ajout final du champ nullable
-`trip_completed`. Le scénario principal ne demande pas de remboursement et son
-chemin de décision reste identique, mais les temps doivent être remesurés sur la
-version gelée avant de présenter ces valeurs comme benchmark définitif.
+La série de trois mesures précède l'ajout final du champ nullable
+`trip_completed`. Le rerun post-correctif confirme toutefois le même chemin et
+le même ordre de grandeur. Une nouvelle série reste recommandée sur la version
+gelée avant de présenter ces valeurs comme benchmark définitif.
 
 ## Baseline mono-prompt
 

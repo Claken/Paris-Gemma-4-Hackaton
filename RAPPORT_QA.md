@@ -9,7 +9,7 @@ hors ligne. Les appels Ollama ont été exécutés strictement l'un après l'aut
 Le scénario principal est reproductible : les trois exécutions ont utilisé les
 deux appels d'outils natifs, vérifié les sources en ligne et obtenu la même
 qualification déterministe de **250 € potentiels**. La suite finale compte
-**28 tests réussis sur 28**.
+**30 tests réussis sur 30**.
 
 ## Environnement
 
@@ -24,9 +24,8 @@ Commande de contrôle :
 .venv/bin/python -m unittest -v test_agent.py
 ```
 
-Résultat final : 28 tests en 0,002 s, aucun échec. Les cinq tests ciblant le
-remboursement, le renoncement et le routage ont également réussi séparément en
-0,001 s.
+Résultat final : 30 tests en 0,002 s, aucun échec. Les tests ciblant le
+remboursement, le renoncement et le routage ont également réussi.
 
 ## Scénarios d'acceptation
 
@@ -87,11 +86,17 @@ Les tests post-correctif confirment :
 - absence de masquage de cette question ou de ce droit par le refus de
   l'indemnisation forfaitaire.
 
+## Validation d'intégration post-correctif
+
+Un passage Ollama/SerpApi complet a été rejoué après le changement de schéma :
+49,29 s, sélection `gemma_tool_calls`, deux outils demandés, zéro rejet, un
+aller-retour de résultat, source en ligne, qualification à 250 € potentiels et
+lettre générée. La déclaration ne contenant aucun choix sur la poursuite du
+voyage, `trip_completed` est correctement resté `null`.
+
 ## Risques résiduels
 
 La panne SerpApi a été simulée de façon contrôlée, pas provoquée sur le réseau
 réel. Le canal d'une compagnie réelle reste également à tester, Aurora Airlines
-étant fictive. Le nouveau champ `trip_completed` et ses variantes de formulation
-ont été validés par tests déterministes, mais le pipeline Ollama complet n'a pas
-été rejoué après ce dernier changement de schéma. Un passage d'intégration final
-est recommandé après gel du code.
+étant fictive. Les timings principaux précèdent le dernier garde déterministe ;
+le passage post-correctif confirme le même ordre de grandeur.

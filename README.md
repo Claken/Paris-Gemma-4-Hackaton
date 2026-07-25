@@ -144,7 +144,7 @@ ou d'éligibilité.
 .venv/bin/python -m unittest -v test_agent.py
 ```
 
-Les 28 tests couvrent le routage, la normalisation des durées, les seuils, les
+Les 30 tests couvrent le routage, la normalisation des durées, les seuils, les
 tranches de distance, le remboursement séparé et la confidentialité des
 recherches. Ils vérifient également les schémas d'outils, le parsing de
 `tool_calls`, le retour `role=tool`, le rejet des fonctions ou arguments hors

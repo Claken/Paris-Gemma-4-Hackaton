@@ -166,8 +166,8 @@ This is an **illustrative potential compensation**, never a guaranteed result.
 
 At writeup drafting time, the repository reports:
 
-- 28 deterministic unit tests passing;
-- a validated online end-to-end run in approximately 51 seconds on the
+- 30 deterministic unit tests passing;
+- a validated online end-to-end run in approximately 47 seconds on the
   selected local setup;
 - Gemma producing two native tool calls during that run, with SerpApi returning
   live results;
@@ -188,7 +188,7 @@ another, `temperature=0`, `think=false`, wall clock via `time.perf_counter()`.
 | Per-stage cost | Vision / tool selection / drafting | 22.32 s / 3.78 s / 21.22 s on average |
 | SerpApi online | Official live sources and claim channel | Validated — 2 sources kept, both under the official Your Europe reference |
 | Forced tool failure | Recovery state and continued output | Validated — `MODE_DEGRADE`, `verified_live=false`, conditional letter asserting no amount, 47.44 s |
-| Native function calling | Two selected tools, validated args, test suite | Validated — 2 tool calls per run, 0 rejected, 1 tool-result round trip, 28/28 tests |
+| Native function calling | Two selected tools, validated args, test suite | Validated — 2 tool calls per run, 0 rejected, 1 tool-result round trip, 30/30 tests |
 | Early-exit branches | Cost of refusing rather than drafting | Ticket with no incident proof: 26.54 s to `ASK_USER`; +2 h 10 delay: 28.49 s to `EXPLICATION_REFUS`, no letter |
 | Agent vs mono-prompt baseline | Accuracy, unsupported facts, latency | **Not measured** — see below |
 

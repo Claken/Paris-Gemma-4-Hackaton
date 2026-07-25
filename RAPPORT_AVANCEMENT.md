@@ -13,7 +13,8 @@ est stable à **47,32 s de moyenne** et produit une indemnisation potentielle de
 
 La checklist est à **33/45 (73 %)**. Le P0 est à **20/21** : seule la
 validation visuelle desktop/mobile dans le navigateur de démo reste ouverte.
-Les **28 tests sur 28** passent.
+Les **30 tests sur 30** passent. Un rerun réel post-correctif a confirmé deux
+`tool_calls`, zéro rejet, `trip_completed=null` et une lettre en 49,29 s.
 
 ## Ce qui est maintenant verrouillé
 

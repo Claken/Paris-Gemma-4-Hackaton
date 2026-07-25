@@ -1,1 +1,1 @@
-"""EU261 Claim Agent — agent local d'instruction de dossier d'indemnisation aerienne."""
+"""EU261 Claim Agent -- a local agent that builds an air passenger compensation claim."""

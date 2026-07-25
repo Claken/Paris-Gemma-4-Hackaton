@@ -1,0 +1,402 @@
+{
+  "meta": {
+    "nom_projet": "EU261 Claim Agent",
+    "destinataire": "Claude Code",
+    "instruction_lecture": "Lis ce fichier en entier avant d'ecrire du code. L'ordre de construction en fin de fichier est imperatif : le graphe d'orchestration se construit AVANT le branchement des vrais tools. Ne pas devier du scope.",
+    "langue_code": "anglais pour le code et les identifiants, francais pour tout ce qui est genere a destination de l'utilisateur (lettre, explications, messages CLI)"
+  },
+
+  "contexte_hackathon": {
+    "evenement": "Gemma 4 Hackathon, 42 Paris",
+    "track": "Track 02 - Autonomous Agents",
+    "question_du_track": "Does it survive contact with failure?",
+    "regle_eliminatoire": "Le score plafonne a 2/5 si le projet est une chaine de prompts lineaire sans branchement ni recuperation d'erreur. C'EST LA CONTRAINTE STRUCTURANTE DE TOUT LE PROJET.",
+    "rubrique_notation": {
+      "gemma_integration": 30,
+      "innovation_impact": 30,
+      "functionality": 20,
+      "presentation_writeup": 20
+    },
+    "livrables_obligatoires": [
+      "Une demo live rejouable par quelqu'un d'autre que l'auteur (enregistrement terminal accepte)",
+      "Un repo public avec du code lisible et un README",
+      "Un writeup Kaggle : ce qui a ete construit, l'architecture, comment Gemma 4 est utilise, ce qui a casse"
+    ],
+    "soumission": "Kaggle uniquement"
+  },
+
+  "contrainte_temps": {
+    "temps_restant_estime": "environ 3h30",
+    "gel_des_features": "T-45min : plus aucune nouvelle fonctionnalite, uniquement demo + writeup",
+    "regle": "Un perimetre etroit qui tourne de bout en bout bat un perimetre large a moitie fonctionnel."
+  },
+
+  "objectif": {
+    "une_phrase": "Un agent local qui instruit un dossier d'indemnisation aerienne EU261 a partir d'une photo de billet, sous preuves incertaines, et qui a le droit de conclure que l'utilisateur n'a droit a rien.",
+    "reformulation_critique": "Ce n'est PAS un generateur de lettres. La lettre est la sortie triviale. La valeur est dans la qualification juridique sous information incomplete et dans le comportement de l'agent quand ses sources echouent.",
+    "differenciateur": "Les acteurs existants (AirHelp, Flightright) prennent une commission de l'ordre de 35%. Ici tout tourne en local : la piece d'identite, le billet et l'IBAN ne quittent jamais la machine, et l'agent dit gratuitement quand le dossier est perdu d'avance."
+  },
+
+  "principes_directeurs": [
+    "Le LLM decide, le code calcule. Distance et montant d'indemnisation sont deterministes, jamais generes par le modele.",
+    "L'agent doit pouvoir echouer proprement : refuser, demander, signaler un conflit. Un agent qui produit toujours une lettre est un moteur de templates.",
+    "Toute donnee du dossier porte une source et un niveau de confiance. Rien n'est affirme sans provenance.",
+    "Chaque appel de tool peut echouer ; chaque echec a une transition definie dans le graphe."
+  ],
+
+  "stack": {
+    "langage": "Python 3.11+",
+    "modele": "gemma4:12b via ollama en local",
+    "multimodal": "VALIDE - gemma4:12b lit correctement les images de billets",
+    "recherche_web": "SerpAPI (cle a mettre dans SERPAPI_KEY)",
+    "pdf": "fpdf2 ou reportlab, au choix, le plus rapide a installer",
+    "pas_de_framework_agent": "Pas de LangChain/LangGraph. Boucle d'orchestration ecrite a la main : c'est plus rapide a debugger en hackathon et le jury voit l'architecture."
+  },
+
+  "architecture": {
+    "principe": "Machine a etats explicite avec boucle d'orchestration. Chaque tour : l'etat courant + le dossier sont evalues, une action est choisie, le resultat met a jour le dossier et l'etat.",
+    "objet_central": "dossier (dict serialisable) qui accumule les faits, leurs sources et leurs confiances. Il est logge apres chaque transition : c'est la trace que le jury regardera.",
+    "etats": [
+      {
+        "id": "INIT",
+        "role": "charge l'image du billet et le prompt utilisateur decrivant la perturbation",
+        "transitions": [{"vers": "EXTRACTION", "condition": "toujours"}]
+      },
+      {
+        "id": "EXTRACTION",
+        "role": "Gemma 4 en vision lit le billet et renvoie un JSON structure avec un niveau de confiance par champ",
+        "gemma": true,
+        "transitions": [
+          {"vers": "VALIDATION_CHAMPS", "condition": "JSON parse avec succes"},
+          {"vers": "EXTRACTION", "condition": "JSON invalide", "note": "reprompt avec le message d'erreur de parsing, max 2 tentatives"},
+          {"vers": "ASK_USER", "condition": "echec apres 2 tentatives, bascule en saisie manuelle"}
+        ]
+      },
+      {
+        "id": "VALIDATION_CHAMPS",
+        "role": "verifie la presence et la confiance des champs requis (numero_vol, date_vol, aeroport_depart, aeroport_arrivee)",
+        "gemma": false,
+        "transitions": [
+          {"vers": "ASK_USER", "condition": "champ requis absent OU confiance = basse/nulle"},
+          {"vers": "RECHERCHE_VOL", "condition": "tous les champs requis presents et fiables"}
+        ]
+      },
+      {
+        "id": "ASK_USER",
+        "role": "pose UNE question ciblee en CLI sur le champ manquant, en expliquant pourquoi il est necessaire",
+        "gemma": false,
+        "transitions": [{"vers": "VALIDATION_CHAMPS", "condition": "reponse saisie"}]
+      },
+      {
+        "id": "RECHERCHE_VOL",
+        "role": "interroge SerpAPI pour retrouver le statut reel du vol (retard a l'arrivee, annulation)",
+        "gemma": false,
+        "transitions": [
+          {"vers": "CONSOLIDATION_PREUVES", "condition": "resultat exploitable"},
+          {"vers": "RECHERCHE_VOL", "condition": "erreur reseau ou reponse vide", "note": "backoff, max 2 retries, reformulation de la requete au 2e essai"},
+          {"vers": "MODE_DEGRADE", "condition": "echec definitif apres retries"}
+        ]
+      },
+      {
+        "id": "MODE_DEGRADE",
+        "role": "aucune source externe disponible. Le dossier repart sur le seul declaratif utilisateur, marque source=declaratif et confiance=basse. L'agent continue au lieu de planter.",
+        "gemma": false,
+        "transitions": [{"vers": "QUALIFICATION_EU261", "condition": "toujours"}]
+      },
+      {
+        "id": "CONSOLIDATION_PREUVES",
+        "role": "confronte le declaratif utilisateur et les sources web. Detecte les contradictions (ex : utilisateur annonce 4h de retard, source web indique 2h).",
+        "gemma": true,
+        "note_gemma": "Gemma juge si deux formulations decrivent le meme fait ou se contredisent. C'est du raisonnement, pas de la comparaison de chaines.",
+        "transitions": [
+          {"vers": "ASK_USER", "condition": "contradiction detectee", "note": "expose les deux versions et demande arbitrage, ne tranche jamais seul"},
+          {"vers": "QUALIFICATION_EU261", "condition": "preuves coherentes"}
+        ]
+      },
+      {
+        "id": "QUALIFICATION_EU261",
+        "role": "Gemma applique les regles du reglement au dossier et produit une decision motivee ; le code calcule distance et montant",
+        "gemma": true,
+        "transitions": [
+          {"vers": "REDACTION", "condition": "eligible"},
+          {"vers": "REDACTION_CONDITIONNELLE", "condition": "eligible mais preuves en confiance basse (mode degrade)"},
+          {"vers": "EXPLICATION_REFUS", "condition": "non eligible"}
+        ]
+      },
+      {
+        "id": "EXPLICATION_REFUS",
+        "role": "produit une explication en francais de pourquoi le dossier n'ouvre pas droit a indemnisation, en citant la regle precise qui bloque. AUCUNE lettre n'est generee.",
+        "gemma": true,
+        "importance": "ETAT CRITIQUE POUR LA DEMO - c'est ce qui distingue l'agent d'un generateur de templates. Ne pas le sacrifier au scope.",
+        "transitions": [{"vers": "FIN", "condition": "toujours"}]
+      },
+      {
+        "id": "REDACTION",
+        "role": "Gemma remplit le template de lettre a partir du dossier",
+        "gemma": true,
+        "transitions": [{"vers": "AUTO_VERIFICATION", "condition": "toujours"}]
+      },
+      {
+        "id": "REDACTION_CONDITIONNELLE",
+        "role": "meme chose, mais la lettre est redigee au conditionnel et demande confirmation des donnees de vol au transporteur au lieu d'affirmer un retard non verifie",
+        "gemma": true,
+        "transitions": [{"vers": "AUTO_VERIFICATION", "condition": "toujours"}]
+      },
+      {
+        "id": "AUTO_VERIFICATION",
+        "role": "second appel Gemma en posture de relecteur critique : cherche les variables non remplies, les faits absents du dossier (hallucinations), les incoherences montant/distance, le ton",
+        "gemma": true,
+        "sortie_attendue": "{\"conforme\": bool, \"defauts\": [str]}",
+        "transitions": [
+          {"vers": "REDACTION", "condition": "conforme = false", "note": "reinjecte la liste des defauts, max 2 boucles"},
+          {"vers": "GENERATION_PDF", "condition": "conforme = true OU 2 boucles atteintes"}
+        ]
+      },
+      {
+        "id": "GENERATION_PDF",
+        "role": "rend la lettre en PDF et ecrit le journal complet du dossier en JSON a cote",
+        "gemma": false,
+        "transitions": [{"vers": "FIN", "condition": "toujours"}]
+      }
+    ]
+  },
+
+  "tools": [
+    {
+      "nom": "extract_ticket",
+      "signature": "extract_ticket(image_path: str) -> dict",
+      "implementation": "appel ollama gemma4:12b en multimodal",
+      "sortie": "voir schemas.extraction",
+      "modes_echec": ["JSON malforme", "image illisible", "champs absents du billet"]
+    },
+    {
+      "nom": "search_flight_status",
+      "signature": "search_flight_status(flight_number: str, date: str) -> dict",
+      "implementation": "SerpAPI, moteur google_light, requete du type '<numero_vol> <date> delayed arrival status'",
+      "avertissement": "Cette source est structurellement peu fiable pour un vol passe. Ce n'est pas un bug a corriger, c'est le mode d'echec que le track demande de gerer. Ne pas passer plus de 30 minutes a fiabiliser cet appel.",
+      "modes_echec": ["timeout reseau", "quota depasse", "zero resultat", "resultats contradictoires"],
+      "sortie": "{\"trouve\": bool, \"retard_arrivee_h\": float|null, \"annule\": bool|null, \"sources\": [{\"titre\": str, \"url\": str}]}"
+    },
+    {
+      "nom": "compute_distance",
+      "signature": "compute_distance(iata_dep: str, iata_arr: str) -> float",
+      "implementation": "haversine sur un CSV local de coordonnees d'aeroports (openflights airports.dat, ou un CSV reduit aux 200 aeroports les plus frequents si le temps manque)",
+      "deterministe": true,
+      "note": "JAMAIS calcule par le LLM. C'est un argument explicite du writeup."
+    },
+    {
+      "nom": "compute_compensation",
+      "signature": "compute_compensation(distance_km: float, type_perturbation: str, retard_arrivee_h: float, reachemine: bool, retard_reacheminement_h: float|null) -> dict",
+      "implementation": "pur Python, table de decision issue de logique_eu261",
+      "deterministe": true,
+      "sortie": "{\"eligible\": bool, \"montant\": int, \"reduction_50\": bool, \"regle_appliquee\": str, \"motif_refus\": str|null}"
+    },
+    {
+      "nom": "ask_user",
+      "signature": "ask_user(question: str, champ: str) -> str",
+      "implementation": "input() en CLI, avec affichage de la raison de la demande"
+    },
+    {
+      "nom": "render_pdf",
+      "signature": "render_pdf(dossier: dict, lettre: str, output_path: str) -> str",
+      "implementation": "fpdf2"
+    }
+  ],
+
+  "schemas": {
+    "extraction": {
+      "description": "Sortie imposee a Gemma a l'etape EXTRACTION. Un niveau de confiance par champ, c'est ce qui alimente la branche ASK_USER.",
+      "exemple": {
+        "numero_vol": {"valeur": "AF1234", "confiance": "haute"},
+        "date_vol": {"valeur": "2026-03-12", "confiance": "haute"},
+        "aeroport_depart": {"valeur": "CDG", "confiance": "haute"},
+        "aeroport_arrivee": {"valeur": "ATH", "confiance": "moyenne"},
+        "ref_reservation": {"valeur": "XKD91P", "confiance": "haute"},
+        "nom_passager": {"valeur": "MARTIN/JEAN", "confiance": "haute"},
+        "compagnie": {"valeur": "Air France", "confiance": "haute"}
+      },
+      "valeurs_confiance": ["haute", "moyenne", "basse", "nulle"],
+      "regle": "confiance nulle => valeur a null, jamais de valeur inventee. A ecrire explicitement dans le prompt systeme."
+    },
+    "dossier": {
+      "description": "Etat central de l'agent, serialise a chaque transition dans un journal.",
+      "champs": {
+        "extraction": "sortie de extract_ticket",
+        "declaratif_utilisateur": "texte libre decrivant la perturbation",
+        "faits_verifies": "liste de {fait, valeur, source, confiance}",
+        "conflits": "liste de contradictions detectees et non resolues",
+        "qualification": "sortie de compute_compensation + motivation redigee par Gemma",
+        "historique": "liste des transitions d'etat avec horodatage, action choisie, resultat"
+      }
+    }
+  },
+
+  "logique_eu261": {
+    "avertissement": "Regles simplifiees pour un prototype. Le PDF genere doit porter une mention indiquant qu'il s'agit d'un projet de courrier a relire, pas d'un conseil juridique.",
+    "champ_application": [
+      "Vol au depart d'un aeroport situe dans l'UE, quel que soit le transporteur",
+      "Vol a destination de l'UE uniquement s'il est opere par un transporteur communautaire",
+      "Hors de ces deux cas : non eligible"
+    ],
+    "faits_generateurs": {
+      "retard": "retard >= 3h a l'ARRIVEE (pas au depart) - point de controle classique, l'agent doit le verifier explicitement",
+      "annulation": "annulation notifiee moins de 14 jours avant le depart",
+      "refus_embarquement": "refus d'embarquement pour surreservation, passager s'etant presente a l'enregistrement dans les delais"
+    },
+    "bareme": [
+      {"condition": "distance <= 1500 km", "montant": 250},
+      {"condition": "vol intra-UE et distance > 1500 km", "montant": 400},
+      {"condition": "distance entre 1500 et 3500 km (hors intra-UE)", "montant": 400},
+      {"condition": "distance > 3500 km avec un point hors UE", "montant": 600}
+    ],
+    "reduction_50_pourcent": "Si un reacheminement est propose et que le retard a l'arrivee reste sous 2h (bareme 250), 3h (bareme 400) ou 4h (bareme 600)",
+    "exoneration": "Circonstances extraordinaires (meteo, greve du controle aerien, instabilite politique, securite). Un probleme technique ordinaire n'est en principe pas une circonstance extraordinaire.",
+    "prescription": "5 ans en France",
+    "cas_de_refus_a_gerer_explicitement": [
+      "retard a l'arrivee inferieur a 3h",
+      "vol hors champ d'application geographique",
+      "annulation notifiee plus de 14 jours a l'avance",
+      "circonstance extraordinaire caracterisee"
+    ]
+  },
+
+  "gemma_load_bearing": {
+    "objectif": "Repondre a la question du jury : que casse-t-il si on remplace Gemma par autre chose ? A recopier dans le writeup.",
+    "usages_non_substituables": [
+      "Lecture multimodale du billet en local : photo -> JSON structure, sans OCR externe et sans qu'aucune donnee personnelle (identite, IBAN, itineraire) ne quitte la machine. Un modele texte hoste ne peut pas faire cela sans casser la promesse de confidentialite qui est le differenciateur du projet.",
+      "Arbitrage semantique entre le declaratif de l'utilisateur et des extraits de resultats de recherche non structures : decider si deux formulations decrivent le meme fait ou se contredisent.",
+      "Auto-critique de la lettre produite, avec detection des faits non presents dans le dossier."
+    ]
+  },
+
+  "cas_demo": [
+    {
+      "id": 1,
+      "nom": "Nominal",
+      "entree": "billet CDG-ATH propre, retard de 4h annonce par l'utilisateur, SerpAPI repond",
+      "comportement_attendu": "extraction fiable, verification web, distance calculee, 400 EUR, lettre generee et validee du premier coup",
+      "prouve": "que le chemin heureux fonctionne de bout en bout"
+    },
+    {
+      "id": 2,
+      "nom": "Panne de source",
+      "entree": "meme dossier, mais reseau coupe en direct pendant la demo",
+      "comportement_attendu": "2 retries visibles dans le log, bascule en MODE_DEGRADE, lettre redigee au conditionnel demandant confirmation au transporteur, confiance basse affichee",
+      "prouve": "la reponse directe a la question du track : survit-il au contact de l'echec"
+    },
+    {
+      "id": 3,
+      "nom": "Non eligible",
+      "entree": "retard de 2h10 a l'arrivee",
+      "comportement_attendu": "refus motive citant le seuil des 3h, AUCUNE lettre produite",
+      "prouve": "que l'agent a un jugement, pas juste un template. CAS LE PLUS IMPORTANT DE LA DEMO."
+    },
+    {
+      "id": 4,
+      "nom": "Preuves contradictoires",
+      "entree": "utilisateur declare 4h de retard, source web indique 2h",
+      "comportement_attendu": "conflit detecte, expose a l'utilisateur, arbitrage demande, pas de tranchage silencieux",
+      "prouve": "absence d'hallucination sous information contradictoire",
+      "repli": "Si le temps manque, remplacer par le cas billet flou (photo coupee) : l'agent demande la date manquante au lieu de l'inventer. Meme demonstration, plus rapide a filmer."
+    }
+  ],
+
+  "metriques": {
+    "obligation": "Le jury refuse les adjectifs. Il faut au moins un chiffre avec une baseline.",
+    "protocole": [
+      "Constituer 10 scenarios etiquetes a la main : eligible/non eligible + montant attendu",
+      "Baseline : un prompt unique 'voici le billet et la situation, ecris la lettre', sans graphe ni tools",
+      "Systeme : le pipeline complet",
+      "Mesurer : (a) taux de decision d'eligibilite correcte, (b) taux de montant correct, (c) taux de recuperation sur les 4 pannes injectees (SerpAPI KO, JSON malforme, champ manquant, preuves contradictoires)",
+      "Mesurer aussi la latence bout en bout moyenne sur le materiel utilise, en precisant le materiel et la quantification du modele"
+    ],
+    "budget_temps": "30 minutes maximum, a lancer pendant la redaction du writeup"
+  },
+
+  "structure_fichiers": {
+    "main.py": "point d'entree CLI : python main.py --ticket billet.png --situation \"retard de 4h a l'arrivee\"",
+    "agent/graph.py": "boucle d'orchestration et machine a etats",
+    "agent/states.py": "une fonction par etat, signature uniforme (dossier) -> (nouvel_etat, dossier)",
+    "agent/tools.py": "les 6 tools",
+    "agent/gemma.py": "wrapper ollama, parsing JSON robuste avec retry sur erreur de parsing",
+    "agent/eu261.py": "table de decision deterministe + haversine",
+    "agent/prompts.py": "prompts systeme centralises",
+    "data/airports.csv": "coordonnees IATA",
+    "templates/lettre.txt": "template fourni dans ce fichier",
+    "demo/": "les 4 scenarios rejouables + un script run_demo.sh",
+    "eval/": "les 10 scenarios etiquetes et le script de mesure",
+    "README.md": "lancement en 3 commandes, schema du graphe en ASCII",
+    "principe": "Le graphe doit etre lisible en ouvrant un seul fichier. C'est ce que le jury regarde en premier."
+  },
+
+  "ordre_de_construction": [
+    {
+      "etape": 1,
+      "duree": "45 min",
+      "quoi": "graph.py + states.py avec TOUS les tools bouchonnes (retours en dur). Verifier a la main que les 4 chemins de demo traversent bien le graphe : nominal, degrade, refus, conflit.",
+      "critere_de_sortie": "les 4 scenarios s'executent avec des donnees factices et impriment leur historique de transitions",
+      "regle": "NE PAS brancher SerpAPI avant que ce point soit valide. Inverser cet ordre est la principale facon de perdre la soiree."
+    },
+    {
+      "etape": 2,
+      "duree": "30 min",
+      "quoi": "eu261.py : haversine + table de decision + tests unitaires rapides sur les 4 tranches du bareme et les cas de refus",
+      "critere_de_sortie": "compute_compensation renvoie les bons montants sur 6 cas connus"
+    },
+    {
+      "etape": 3,
+      "duree": "30 min",
+      "quoi": "brancher le vrai extract_ticket (Gemma vision, schema avec confiance) et le vrai search_flight_status (SerpAPI)",
+      "critere_de_sortie": "un vrai billet traverse le graphe jusqu'a la qualification",
+      "garde_fou": "2 billets propres + 1 billet degrade suffisent. Ne pas fiabiliser l'extraction sur 15 billets."
+    },
+    {
+      "etape": 4,
+      "duree": "25 min",
+      "quoi": "REDACTION + AUTO_VERIFICATION + GENERATION_PDF",
+      "critere_de_sortie": "un PDF sort, sans variable de template non remplie"
+    },
+    {
+      "etape": 5,
+      "duree": "20 min",
+      "quoi": "scenarios de demo rejouables + enregistrement terminal (asciinema ou capture video)",
+      "critere_de_sortie": "quelqu'un d'autre peut lancer run_demo.sh et voir les 4 cas"
+    },
+    {
+      "etape": 6,
+      "duree": "30 min",
+      "quoi": "eval + writeup Kaggle + README",
+      "regle": "Se lancer meme si le code n'est pas fini. Le writeup vaut 20 points et c'est ce que le jury lit pour selectionner les finalistes."
+    }
+  ],
+
+  "anti_patterns": [
+    "Construire les tools avant le graphe : garantit de passer la fin de soiree a debugger des reponses de moteur de recherche au lieu de la partie notee",
+    "Laisser le LLM calculer une distance ou un montant",
+    "Supprimer l'etat EXPLICATION_REFUS pour gagner du temps : c'est l'etat qui porte la valeur de demonstration",
+    "Faire du 'happy path only' et esperer que SerpAPI reponde pendant le pitch",
+    "Une demo qui exige un fichier precis ouvert et une narration : notee comme si elle ne fonctionnait pas",
+    "Ecrire le writeup dans les 20 dernieres minutes",
+    "Elargir le perimetre (multi-langue, interface web, gestion des bagages) : couper a T-45min"
+  ],
+
+  "template_lettre": {
+    "subject": "Réclamation — Demande d'indemnisation au titre du règlement (CE) n° 261/2004 Vol {{numero_vol}} du {{date_vol}} — Réf. réservation {{ref_reservation}}",
+    "sender": {
+      "name": "{{nom_passager}}",
+      "address": "{{adresse_passager}}",
+      "email": "{{email_passager}}",
+      "phone": "{{telephone_passager}}"
+    },
+    "recipient": {
+      "department": "Service Réclamations",
+      "company_name": "{{nom_compagnie}}",
+      "company_address": "{{adresse_siege_compagnie}}"
+    },
+    "location_and_date": "À {{ville}}, le {{date_courrier}}",
+    "body": "Madame, Monsieur,\n\nJe vous adresse cette réclamation concernant le vol {{numero_vol}} du {{date_vol}}, reliant {{aeroport_depart}} à {{aeroport_arrivee}}, sous la référence de réservation {{ref_reservation}}, sur lequel je disposais d'une réservation confirmée et me suis présenté(e) à l'enregistrement dans les conditions requises.\n\nCe vol a subi {{type_perturbation}} {{detail_perturbation}}, ce qui m'ouvre droit à indemnisation.\n\nConformément au règlement (CE) n° 261/2004, la distance de ce vol étant de {{distance_km}} km, je vous demande le versement d'une indemnité forfaitaire de {{montant}} €.\n\nJe vous remercie de procéder à ce versement par virement sur le compte suivant :\nIBAN : {{iban}}\nBIC : {{bic}}\nTitulaire : {{titulaire_compte}}\n\nVous trouverez ci-joint les justificatifs : {{liste_pieces_jointes}}.\n\nJe vous mets en demeure de procéder à ce versement sous quinze jours à compter de la réception de ce courrier. À défaut de réponse ou en cas de refus non justifié, je saisirai le médiateur compétent, puis, si nécessaire, la juridiction compétente, et signalerai ce litige à la Direction générale de l'aviation civile (DGAC).\n\nDans l'attente de votre retour, je vous prie d'agréer, Madame, Monsieur, l'expression de mes salutations distinguées.",
+    "signature": "{{nom_passager}}\n{{signature}}",
+    "variante_conditionnelle": "En MODE_DEGRADE, remplacer le paragraphe du fait generateur par une formulation demandant au transporteur de confirmer l'heure d'arrivee effective, et ne pas affirmer une duree de retard non verifiee.",
+    "mention_obligatoire_pdf": "Document généré par un outil automatisé à partir des éléments fournis. À relire et à signer avant envoi. Ne constitue pas un conseil juridique."
+  }
+}

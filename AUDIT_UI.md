@@ -1,5 +1,14 @@
 # Audit UI — Droit de Retard
 
+## État après intégration
+
+- B1, B2, I1, I2 et I4 ont été corrigés dans l'interface.
+- La trace affiche maintenant la sélection Gemma, l'outil, la provenance, les
+  appels demandés/rejetés et le fallback.
+- L'indemnisation et le remboursement sont présentés avant les détails longs.
+- B3 reste ouvert : le contrôle visuel réel desktop/mobile doit encore être
+  effectué dans le navigateur utilisé pour la démonstration.
+
 ## Périmètre et méthode
 
 Audit effectué le 25 juillet 2026 sur `static/index.html` et sur la page servie
@@ -138,4 +147,3 @@ de la couleur.
 4. Vérifier tous les états dans un navigateur réel (B3).
 5. Améliorer progression, erreurs et accessibilité (I5–I7).
 6. Appliquer les ajustements cosmétiques seulement si le temps le permet.
-

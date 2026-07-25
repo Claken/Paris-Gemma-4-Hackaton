@@ -68,6 +68,7 @@ seuils, de la distance, du montant et des branches de sécurité.
 - [Ollama](https://ollama.com/) avec `gemma4:12b` ;
 - Poppler pour lire un PDF (`brew install poppler` sur macOS) ; les images
   PNG, JPEG et WEBP n'en ont pas besoin ;
+- FFmpeg pour la dictée locale optionnelle (`brew install ffmpeg`) ;
 - une clé SerpApi facultative pour la vérification en direct.
 
 Le code d'exécution utilise uniquement la bibliothèque standard Python.
@@ -103,10 +104,14 @@ commande enregistrée ou une capture de la démo.
 ### Interface web
 
 ```bash
-.venv/bin/python app.py
+./demo.sh
 ```
 
-Ouvrez [http://127.0.0.1:7860](http://127.0.0.1:7860), chargez
+Ce script vérifie Ollama, précharge `gemma4:12b`, démarre l'application et
+ouvre le navigateur. Le lancement manuel reste disponible avec
+`.venv/bin/python app.py`.
+
+Ouvrez [http://127.0.0.1:7865](http://127.0.0.1:7865), chargez
 `billet_avion_fictif.pdf`, puis décrivez l'incident :
 
 ```text
@@ -115,6 +120,12 @@ Le vol est arrivé avec 3 h 25 de retard après un problème technique.
 
 La référence lue sur le billet doit être confirmée manuellement avant d'être
 utilisée dans la lettre.
+
+Le bouton **Dicter avec Gemma** enregistre au maximum 20 secondes, convertit
+l'audio localement en WAV puis demande à `gemma4:12b` de le transcrire. Aucun
+audio n'est envoyé à un service cloud et aucun fichier n'est conservé. La
+transcription doit être relue et confirmée avant l'analyse. Cette fonction est
+optionnelle : la saisie manuelle reste toujours disponible.
 
 ### Ligne de commande
 
@@ -144,7 +155,7 @@ ou d'éligibilité.
 .venv/bin/python -m unittest -v test_agent.py
 ```
 
-Les 30 tests couvrent le routage, la normalisation des durées, les seuils, les
+Les 32 tests couvrent le routage, la normalisation des durées, les seuils, les
 tranches de distance, le remboursement séparé et la confidentialité des
 recherches. Ils vérifient également les schémas d'outils, le parsing de
 `tool_calls`, le retour `role=tool`, le rejet des fonctions ou arguments hors

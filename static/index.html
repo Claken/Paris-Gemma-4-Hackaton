@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Droit de Retard</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23176b4d'/%3E%3Ccircle cx='32' cy='32' r='17' fill='none' stroke='%23fffdf7' stroke-width='4.5'/%3E%3Cpath d='M32 21v12l8.5 5' fill='none' stroke='%23fffdf7' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
   <style>
     :root {
       color-scheme: light;
@@ -58,6 +59,23 @@
     }
     button:hover { background: #10583e; }
     button:disabled { cursor: wait; opacity: .65; }
+    .dictation-row {
+      display: flex; align-items: center; gap: 12px; margin-top: 9px;
+    }
+    .dictation-row button {
+      width: auto; min-width: 154px; margin: 0; padding: 11px 14px;
+      border: 1px solid var(--green); background: transparent; color: var(--green);
+    }
+    .dictation-row button:hover { background: var(--green-soft); }
+    .dictation-row button.recording {
+      border-color: var(--red); background: #f8dfdc; color: var(--red);
+    }
+    .dictation-row .note { margin: 0; }
+    .confirm-row {
+      display: flex; align-items: flex-start; gap: 8px; margin: 10px 0 0;
+      font-weight: 600;
+    }
+    .confirm-row input { width: auto; margin-top: 5px; }
     .note { margin-top: 16px; color: var(--muted); font-size: 13px; }
     .placeholder {
       min-height: 420px; display: grid; place-items: center; text-align: center;
@@ -86,8 +104,14 @@
     .trace { list-style: none; padding: 0; }
     .trace li { position: relative; margin: 0 0 10px; padding: 10px 12px 10px 34px; background: #f1f3ed; border-radius: 10px; }
     .trace li::before { content: "✓"; position: absolute; left: 12px; color: var(--green); font-weight: 900; }
+    .trace li.t-warn { background: var(--amber-soft); }
+    .trace li.t-warn::before { content: "⚠"; color: var(--amber); }
+    .trace li.t-bad { background: #f8dfdc; }
+    .trace li.t-bad::before { content: "✕"; color: var(--red); }
+    .trace li.t-neutral::before { content: "•"; color: #465149; }
     pre {
       white-space: pre-wrap; overflow-wrap: anywhere; margin: 10px 0 0;
+      max-height: 42vh; overflow: auto;
       border-radius: 12px; background: #f1f3ed; padding: 16px; font: 14px/1.55 ui-monospace, monospace;
     }
     a { color: var(--green); }
@@ -118,6 +142,18 @@
 
       <label for="incident">Que s'est-il passé ?</label>
       <textarea id="incident" placeholder="Ex. Le vol est arrivé avec 3 h 25 de retard. La compagnie a évoqué un problème technique."></textarea>
+      <div class="dictation-row">
+        <button id="dictate" type="button" aria-pressed="false">
+          🎙️ Dicter avec Gemma
+        </button>
+        <p id="dictation-status" class="note" role="status" aria-live="polite">
+          Local · 20 s max
+        </p>
+      </div>
+      <label id="dictation-confirm-row" class="confirm-row" hidden>
+        <input id="dictation-confirm" type="checkbox">
+        J’ai relu et je confirme cette transcription.
+      </label>
 
       <label for="reference">Référence confirmée (optionnel)</label>
       <input id="reference" placeholder="Ex. FQ7T2K" autocomplete="off">
@@ -142,6 +178,16 @@
   const form = document.querySelector("#form");
   const result = document.querySelector("#result");
   const submit = document.querySelector("#submit");
+  const incident = document.querySelector("#incident");
+  const dictate = document.querySelector("#dictate");
+  const dictationStatus = document.querySelector("#dictation-status");
+  const dictationConfirmRow = document.querySelector("#dictation-confirm-row");
+  const dictationConfirm = document.querySelector("#dictation-confirm");
+  let recorder = null;
+  let audioStream = null;
+  let audioChunks = [];
+  let stopTimer = null;
+  let dictationPending = false;
 
   const element = (tag, text, className) => {
     const node = document.createElement(tag);
@@ -178,6 +224,178 @@
     reader.onload = () => resolve(String(reader.result).split(",")[1]);
     reader.readAsDataURL(file);
   });
+
+  const stopAudioTracks = () => {
+    for (const track of audioStream?.getTracks() || []) track.stop();
+    audioStream = null;
+  };
+
+  const setDictationIdle = () => {
+    clearTimeout(stopTimer);
+    stopTimer = null;
+    dictate.disabled = false;
+    dictate.classList.remove("recording");
+    dictate.setAttribute("aria-pressed", "false");
+    dictate.textContent = "🎙️ Dicter avec Gemma";
+  };
+
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+    dictate.disabled = true;
+    dictationStatus.textContent =
+      "Micro indisponible — la saisie manuelle reste disponible.";
+  }
+
+  dictate.addEventListener("click", async () => {
+    if (recorder?.state === "recording") {
+      recorder.stop();
+      return;
+    }
+    try {
+      audioStream = await navigator.mediaDevices.getUserMedia({audio: true});
+      const preferredTypes = [
+        "audio/webm;codecs=opus",
+        "audio/webm",
+        "audio/mp4"
+      ];
+      const mimeType = preferredTypes.find(type =>
+        MediaRecorder.isTypeSupported(type)
+      );
+      recorder = mimeType
+        ? new MediaRecorder(audioStream, {mimeType})
+        : new MediaRecorder(audioStream);
+      audioChunks = [];
+      recorder.addEventListener("dataavailable", event => {
+        if (event.data.size) audioChunks.push(event.data);
+      });
+      recorder.addEventListener("error", () => {
+        stopAudioTracks();
+        setDictationIdle();
+        dictationStatus.textContent =
+          "Enregistrement impossible — saisissez l’incident manuellement.";
+      });
+      recorder.addEventListener("stop", async () => {
+        const recordedType = recorder?.mimeType || "audio/webm";
+        stopAudioTracks();
+        recorder = null;
+        clearTimeout(stopTimer);
+        dictate.disabled = true;
+        dictate.classList.remove("recording");
+        dictate.textContent = "Transcription locale…";
+        dictationStatus.textContent = "Gemma 4 écoute l’enregistrement…";
+        try {
+          const audio = new Blob(audioChunks, {type: recordedType});
+          if (!audio.size) throw new Error("Aucun son enregistré.");
+          const response = await fetch("/api/transcribe", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+              audio_base64: await fileAsBase64(audio)
+            })
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || "Transcription impossible.");
+          }
+          const prefix = incident.value.trim() ? `${incident.value.trim()} ` : "";
+          incident.value = `${prefix}${data.transcription}`.trim();
+          dictationPending = true;
+          dictationConfirm.checked = false;
+          dictationConfirmRow.hidden = false;
+          dictationStatus.textContent =
+            "Transcription locale terminée — relisez-la avant l’analyse.";
+          incident.focus();
+        } catch (error) {
+          dictationPending = false;
+          dictationConfirmRow.hidden = true;
+          dictationStatus.textContent =
+            `${error.message} La saisie manuelle reste disponible.`;
+        } finally {
+          audioChunks = [];
+          setDictationIdle();
+        }
+      });
+      recorder.start();
+      dictate.classList.add("recording");
+      dictate.setAttribute("aria-pressed", "true");
+      dictate.textContent = "■ Arrêter";
+      dictationStatus.textContent = "Écoute locale en cours…";
+      stopTimer = setTimeout(() => {
+        if (recorder?.state === "recording") recorder.stop();
+      }, 20000);
+    } catch {
+      stopAudioTracks();
+      setDictationIdle();
+      dictationStatus.textContent =
+        "Permission micro refusée — la saisie manuelle reste disponible.";
+    }
+  });
+
+  incident.addEventListener("input", () => {
+    if (!dictationPending) return;
+    dictationConfirm.checked = false;
+    dictationStatus.textContent =
+      "Texte modifié — confirmez la transcription avant l’analyse.";
+  });
+
+  dictationConfirm.addEventListener("change", () => {
+    dictationStatus.textContent = dictationConfirm.checked
+      ? "Transcription confirmée."
+      : "Relisez puis confirmez la transcription.";
+  });
+
+  const buildTrace = data => {
+    const trace = element("div", null, "section");
+    trace.append(element("h3", "Trace de l'agent"));
+    const seconds = (data.trace || [])
+      .reduce((total, step) => total + (step.duration_seconds || 0), 0);
+    trace.append(element(
+      "p",
+      `${data.model || "Gemma 4"} · 100 % local · ${seconds.toFixed(1)} s cumulées`,
+      "note"
+    ));
+    const traceList = element("ul", null, "trace");
+    for (const step of data.trace || []) {
+      const timing = step.duration_seconds ? ` · ${step.duration_seconds} s` : "";
+      const [outcomeLabel, outcomeTone] = statusMeta(step.outcome);
+      const item = element("li", null, outcomeTone ? `t-${outcomeTone}` : null);
+      item.append(element(
+        "strong",
+        `${step.state || step.step} — ${outcomeLabel}${timing}`
+      ));
+      if (step.tool) item.append(element("p", `Outil : ${step.tool}`, "note"));
+      if (step.selected_by) {
+        item.append(element(
+          "p",
+          `Sélection : ${
+            step.selected_by === "gemma_tool_call"
+              ? "Gemma (tool_call)"
+              : "fallback déterministe"
+          }`,
+          "note"
+        ));
+      }
+      if (step.details) item.append(element("p", step.details, "note"));
+      if (step.requested_tool_calls !== undefined) {
+        item.append(element(
+          "p",
+          `${step.requested_tool_calls} appel(s) demandé(s) · ${
+            step.rejected_tool_calls || 0
+          } rejeté(s) · ${step.tool_result_round_trips || 0} retour(s) outil`,
+          "note"
+        ));
+      }
+      if (step.fallback !== undefined) {
+        item.append(element(
+          "p",
+          `Fallback déterministe : ${step.fallback ? "oui" : "non"}`,
+          "note"
+        ));
+      }
+      traceList.append(item);
+    }
+    trace.append(traceList);
+    return trace;
+  };
 
   function render(data) {
     result.replaceChildren();
@@ -218,6 +436,8 @@
         "note"
       ));
     }
+
+    if (data.trace?.length) result.append(buildTrace(data));
 
     const factsSection = element("div", null, "section");
     factsSection.append(element("h3", "Faits extraits"));
@@ -266,6 +486,32 @@
       }
       research.append(sourceList);
       result.append(research);
+
+      const found = data.research.claim_channel;
+      if (found) {
+        const section = element("div", null, "section");
+        const [label, className] = statusMeta(found.status);
+        section.append(element("h3", "Canal de réclamation"));
+        section.append(element("span", label, `badge ${className}`));
+        if (found.channel) {
+          const link = element("a", found.channel);
+          link.href = found.channel;
+          link.target = "_blank";
+          link.rel = "noreferrer";
+          const paragraph = element("p");
+          paragraph.append(link);
+          section.append(paragraph);
+        }
+        if (found.message) section.append(element("p", found.message, "note"));
+        if (!found.channel && !found.message) {
+          section.append(element(
+            "p",
+            "Aucun canal officiel confirmé : adressez la demande au transporteur qui a opéré le vol.",
+            "note"
+          ));
+        }
+        result.append(section);
+      }
     }
 
     if (data.claim) {
@@ -287,54 +533,21 @@
       result.append(refusal);
     }
 
-    const trace = element("div", null, "section");
-    trace.append(element("h3", "Trace de l'agent"));
-    const traceList = element("ul", null, "trace");
-    for (const step of data.trace || []) {
-      const timing = step.duration_seconds ? ` · ${step.duration_seconds} s` : "";
-      const [outcomeLabel] = statusMeta(step.outcome);
-      const item = element("li");
-      item.append(element(
-        "strong",
-        `${step.state || step.step} — ${outcomeLabel}${timing}`
-      ));
-      if (step.tool) item.append(element("p", `Outil : ${step.tool}`, "note"));
-      if (step.selected_by) {
-        item.append(element(
-          "p",
-          `Sélection : ${
-            step.selected_by === "gemma_tool_call"
-              ? "Gemma (tool_call)"
-              : "fallback déterministe"
-          }`,
-          "note"
-        ));
-      }
-      if (step.details) item.append(element("p", step.details, "note"));
-      if (step.requested_tool_calls !== undefined) {
-        item.append(element(
-          "p",
-          `${step.requested_tool_calls} appel(s) demandé(s) · ${
-            step.rejected_tool_calls || 0
-          } rejeté(s) · ${step.tool_result_round_trips || 0} retour(s) outil`,
-          "note"
-        ));
-      }
-      if (step.fallback !== undefined) {
-        item.append(element(
-          "p",
-          `Fallback déterministe : ${step.fallback ? "oui" : "non"}`,
-          "note"
-        ));
-      }
-      traceList.append(item);
-    }
-    trace.append(traceList);
-    result.append(trace);
   }
 
   form.addEventListener("submit", async event => {
     event.preventDefault();
+    if (recorder?.state === "recording") {
+      dictationStatus.textContent =
+        "Arrêtez d’abord l’enregistrement avant l’analyse.";
+      return;
+    }
+    if (dictationPending && !dictationConfirm.checked) {
+      dictationStatus.textContent =
+        "Relisez la transcription puis confirmez-la avant l’analyse.";
+      dictationConfirm.focus();
+      return;
+    }
     const file = document.querySelector("#document").files[0];
     if (!file) return;
     submit.disabled = true;
@@ -347,7 +560,7 @@
         body: JSON.stringify({
           filename: file.name,
           file_base64: await fileAsBase64(file),
-          incident: document.querySelector("#incident").value,
+          incident: incident.value,
           booking_reference: document.querySelector("#reference").value
         })
       });

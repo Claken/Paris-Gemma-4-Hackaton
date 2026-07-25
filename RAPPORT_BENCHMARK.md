@@ -14,7 +14,7 @@ Plateforme : MacBook Pro `Mac17,9`, Apple M5 Pro 15 cœurs, 24 Go, macOS 26.5.2,
 Ollama 0.32.3 et Gemma 4 11,9B Q4_K_M. Le modèle annonce les capacités vision,
 tools et thinking.
 
-La suite fonctionnelle associée au benchmark passe désormais à **30/30 tests**,
+La suite fonctionnelle associée au benchmark passe désormais à **32/32 tests**,
 dont cinq tests ciblés sur le remboursement, le renoncement explicite et le
 routage de décision.
 

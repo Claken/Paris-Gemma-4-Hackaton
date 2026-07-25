@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import io
 import json
 import os
 import re
@@ -18,6 +19,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import wave
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +33,8 @@ from tools import (
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/chat")
 MODEL = os.getenv("DR_MODEL", "gemma4:12b")
+MAX_AUDIO_BYTES = 6 * 1024 * 1024
+MAX_AUDIO_SECONDS = 30
 
 NULLABLE_STRING = {"anyOf": [{"type": "string"}, {"type": "null"}]}
 NULLABLE_INTEGER = {"anyOf": [{"type": "integer"}, {"type": "null"}]}
@@ -238,6 +242,105 @@ def _chat(payload: dict[str, Any], timeout: int = 300) -> dict[str, Any]:
             "Ollama est inaccessible. Vérifie qu'il est lancé et que "
             f"`{MODEL}` est installé."
         ) from exc
+
+
+def _audio_as_wav(audio_bytes: bytes) -> bytes:
+    """Normalise un enregistrement navigateur en WAV PCM pour Gemma 4."""
+    if not audio_bytes or len(audio_bytes) > MAX_AUDIO_BYTES:
+        raise AgentError("L'enregistrement audio est vide ou trop volumineux.")
+    if audio_bytes[:4] == b"RIFF" and audio_bytes[8:12] == b"WAVE":
+        wav_bytes = audio_bytes
+    else:
+        ffmpeg = shutil.which("ffmpeg")
+        if not ffmpeg:
+            raise AgentError(
+                "La dictée nécessite ffmpeg sur cette machine. "
+                "La saisie manuelle reste disponible."
+            )
+        with tempfile.TemporaryDirectory(prefix="droit-retard-audio-") as folder:
+            source = Path(folder) / "recording.webm"
+            target = Path(folder) / "recording.wav"
+            source.write_bytes(audio_bytes)
+            try:
+                completed = subprocess.run(
+                    [
+                        ffmpeg,
+                        "-hide_banner",
+                        "-loglevel",
+                        "error",
+                        "-y",
+                        "-i",
+                        str(source),
+                        "-t",
+                        str(MAX_AUDIO_SECONDS),
+                        "-ac",
+                        "2",
+                        "-ar",
+                        "48000",
+                        "-c:a",
+                        "pcm_s16le",
+                        str(target),
+                    ],
+                    capture_output=True,
+                    check=False,
+                    timeout=20,
+                )
+            except subprocess.TimeoutExpired as exc:
+                raise AgentError("La conversion audio a expiré.") from exc
+            if completed.returncode or not target.is_file():
+                raise AgentError(
+                    "Format audio non reconnu. Saisis l'incident manuellement."
+                )
+            wav_bytes = target.read_bytes()
+
+    try:
+        with wave.open(io.BytesIO(wav_bytes), "rb") as recording:
+            rate = recording.getframerate()
+            frames = recording.getnframes()
+            duration = frames / rate if rate else 0
+    except (wave.Error, EOFError) as exc:
+        raise AgentError("Le fichier audio WAV est invalide.") from exc
+    if not 0 < duration <= MAX_AUDIO_SECONDS + 0.5:
+        raise AgentError("La dictée doit durer au maximum 30 secondes.")
+    return wav_bytes
+
+
+def transcribe_audio(audio_bytes: bytes) -> str:
+    """Transcrit localement une courte dictée avec Gemma 4 via Ollama."""
+    wav_bytes = _audio_as_wav(audio_bytes)
+    response = _chat(
+        {
+            "model": MODEL,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": (
+                        "Transcribe the following speech segment in French "
+                        "into French text. Only output the transcription, "
+                        "with no newlines. When transcribing numbers, write "
+                        "digits."
+                    ),
+                    # Ollama 0.32 détecte les WAV par leur signature dans son
+                    # canal multimodal, également utilisé pour les images.
+                    "images": [base64.b64encode(wav_bytes).decode("ascii")],
+                }
+            ],
+            "stream": False,
+            "think": False,
+            "options": {"temperature": 0, "num_ctx": 8192},
+            "keep_alive": "10m",
+        },
+        timeout=180,
+    )
+    try:
+        transcription = " ".join(response["message"]["content"].split()).strip()
+    except (KeyError, TypeError, AttributeError) as exc:
+        raise AgentError("Gemma n'a pas renvoyé de transcription.") from exc
+    if not transcription:
+        raise AgentError("Aucune parole n'a été reconnue.")
+    if len(transcription) > 1200:
+        raise AgentError("La transcription produite est anormalement longue.")
+    return transcription
 
 
 def extract_flight(

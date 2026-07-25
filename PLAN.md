@@ -8,8 +8,8 @@ Dernière mise à jour : 25 juillet 2026
 | --- | ---: | --- |
 | P0 — Flux démontrable et agentique | 20/21 | 95 % — validation visuelle restante |
 | P1 — Fiabilité | 8/13 | 62 % — compléments ciblés |
-| P2 — Soumission | 5/11 | 45 % — livrables en production |
-| **Total checklist** | **33/45** | **73 %** |
+| P2 — Soumission | 6/11 | 55 % — deck livré |
+| **Total checklist** | **34/45** | **76 %** |
 
 Le produit principal fonctionne déjà de bout en bout : lecture du billet avec
 Gemma, qualification déterministe, mode hors ligne et lettre conditionnelle.
@@ -65,7 +65,7 @@ remboursement du prix du billet.
 
 ## P1 - Fiabilité
 
-- [x] Maintenir les 30 tests unitaires du routeur, des règles, du function
+- [x] Maintenir les 32 tests unitaires du routeur, des règles, du function
   calling et de la normalisation.
 - [x] Faire confirmer la référence de réservation avant de l'utiliser dans la
   lettre (`--booking-reference FQ7T2K` ou champ de l'interface).
@@ -99,12 +99,25 @@ remboursement du prix du billet.
 - [ ] Déclarer le Track 02 lors de la soumission.
 - [x] Vérifier le positionnement face à AirHelp, Flightright et Claim Compass.
 - [x] Ajouter au README/writeup une matrice concurrentielle sourcée.
-- [ ] Préparer une slide « Nos avantages » limitée à quatre preuves :
+- [x] Préparer une slide « Nos avantages » limitée à quatre preuves :
   local-first, 0 % de commission, décision explicable et récupération après
   panne.
 - [x] Préparer les limites uniquement pour les questions du jury, sans les
   inclure dans le pitch principal.
 - [ ] Vérifier les trois livrables : démo, dépôt public, writeup Kaggle.
+
+## Extension livrée - Dictée locale
+
+- [x] Enregistrer jusqu'à 20 secondes depuis le navigateur.
+- [x] Convertir l'enregistrement en WAV localement avec FFmpeg.
+- [x] Transcrire avec la capacité audio de `gemma4:12b` via Ollama.
+- [x] Ne jamais envoyer l'audio à un service cloud ni le conserver.
+- [x] Exiger une relecture et une confirmation avant l'analyse.
+- [x] Conserver la saisie manuelle comme fallback permanent.
+
+Le transport WAV exploite le canal multimodal reconnu par Ollama 0.32.3. Cette
+extension reste optionnelle pour la vidéo : elle ne doit être montrée qu'après
+un test micro réussi dans le navigateur utilisé pour enregistrer.
 
 ## Bonus non bloquant - RAG local des compagnies
 
@@ -159,7 +172,7 @@ terminés. Une démo étroite et reproductible prime sur un périmètre plus lar
 - **Function calling :** outils natifs, validation, fallback et tests — livré
   et fusionné.
 - **Documentation :** `README.md` et `WRITEUP_KAGGLE.md` — livrés.
-- **Présentation :** script, brief, audit et deck rendu — deck en cours.
+- **Présentation :** script, brief, audit et deck rendu — livré et contrôlé.
 - **QA/benchmark :** trois runs, scénarios et rapports — livré.
 - **RAG procédural :** spécification et trois fiches officielles — livré,
   intégration différée.

@@ -11,11 +11,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from agent import AgentError, process
+from agent import AgentError, process, transcribe_audio
 
 ROOT = Path(__file__).resolve().parent
 INDEX = ROOT / "static" / "index.html"
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+MAX_AUDIO_BYTES = 6 * 1024 * 1024
 ALLOWED_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".webp"}
 
 
@@ -42,14 +43,34 @@ class DemoHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self) -> None:  # noqa: N802 - API imposée par BaseHTTPRequestHandler
-        if self.path != "/api/analyze":
+        if self.path not in {"/api/analyze", "/api/transcribe"}:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
-            if length <= 0 or length > MAX_UPLOAD_BYTES * 2:
+            max_request_bytes = (
+                MAX_AUDIO_BYTES if self.path == "/api/transcribe" else MAX_UPLOAD_BYTES
+            ) * 2
+            if length <= 0 or length > max_request_bytes:
                 raise AgentError("Requête vide ou trop volumineuse.")
             payload = json.loads(self.rfile.read(length))
+            if self.path == "/api/transcribe":
+                try:
+                    audio = base64.b64decode(
+                        payload.get("audio_base64", ""), validate=True
+                    )
+                except (binascii.Error, ValueError) as exc:
+                    raise AgentError("Enregistrement audio invalide.") from exc
+                if not audio or len(audio) > MAX_AUDIO_BYTES:
+                    raise AgentError(
+                        "L'enregistrement doit peser moins de 6 Mo."
+                    )
+                self._send_json(
+                    HTTPStatus.OK,
+                    {"transcription": transcribe_audio(audio)},
+                )
+                return
+
             filename = Path(str(payload.get("filename", ""))).name
             suffix = Path(filename).suffix.lower()
             if suffix not in ALLOWED_SUFFIXES:
@@ -90,7 +111,7 @@ class DemoHandler(BaseHTTPRequestHandler):
 def main() -> None:
     parser = argparse.ArgumentParser(description="Interface Droit de Retard")
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", default=7860, type=int)
+    parser.add_argument("--port", default=7865, type=int)
     args = parser.parse_args()
     server = ThreadingHTTPServer((args.host, args.port), DemoHandler)
     print(f"Droit de Retard disponible sur http://{args.host}:{args.port}")

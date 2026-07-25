@@ -9,7 +9,7 @@ Statut : vague 1 autorisée le 25 juillet 2026
 | --- | --- | --- |
 | FUNCTION | Fusionné | Function calling natif et tests |
 | DOC | Livré | `README.md`, `WRITEUP_KAGGLE.md` |
-| VISUEL | En finalisation | Script, brief, audit, deck |
+| VISUEL | Livré | Script, brief, audit, deck contrôlé |
 | RAG | Livré | Spécification et trois fiches JSON |
 | QA | Livré | `RAPPORT_QA.md`, `RAPPORT_BENCHMARK.md` |
 

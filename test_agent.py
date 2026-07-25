@@ -1,10 +1,19 @@
 """Tests déterministes du routage de dossiers aériens."""
 from __future__ import annotations
 
+import io
 import unittest
 from unittest.mock import patch
+import wave
 
-from agent import merge_incident_statement, process, research_case, route_case
+from agent import (
+    AgentError,
+    merge_incident_statement,
+    process,
+    research_case,
+    route_case,
+    transcribe_audio,
+)
 from eu261 import (
     assess_ticket_reimbursement,
     compensation_amount,
@@ -26,6 +35,42 @@ COMPLETE_FLIGHT = {
     "destination": "Lisbonne LIS",
     "departure_date": "2026-09-14",
 }
+
+
+class AudioTranscriptionTests(unittest.TestCase):
+    @staticmethod
+    def wav_bytes() -> bytes:
+        output = io.BytesIO()
+        with wave.open(output, "wb") as recording:
+            recording.setnchannels(1)
+            recording.setsampwidth(2)
+            recording.setframerate(16000)
+            recording.writeframes(b"\x00\x00" * 1600)
+        return output.getvalue()
+
+    @patch("agent._chat")
+    def test_transcription_uses_local_gemma_audio(self, chat):
+        chat.return_value = {
+            "message": {
+                "content": "Le vol est arrivé avec 3 h 25 de retard.\n"
+            }
+        }
+
+        transcription = transcribe_audio(self.wav_bytes())
+
+        self.assertEqual(
+            transcription,
+            "Le vol est arrivé avec 3 h 25 de retard.",
+        )
+        payload = chat.call_args.args[0]
+        self.assertEqual(payload["model"], "gemma4:12b")
+        self.assertFalse(payload["think"])
+        self.assertEqual(len(payload["messages"][0]["images"]), 1)
+        self.assertNotIn("audios", payload["messages"][0])
+
+    def test_transcription_rejects_invalid_audio(self):
+        with self.assertRaises(AgentError):
+            transcribe_audio(b"pas un enregistrement")
 
 
 class RouteCaseTests(unittest.TestCase):

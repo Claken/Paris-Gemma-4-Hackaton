@@ -9,7 +9,7 @@ hors ligne. Les appels Ollama ont été exécutés strictement l'un après l'aut
 Le scénario principal est reproductible : les trois exécutions ont utilisé les
 deux appels d'outils natifs, vérifié les sources en ligne et obtenu la même
 qualification déterministe de **250 € potentiels**. La suite finale compte
-**30 tests réussis sur 30**.
+**32 tests réussis sur 32**.
 
 ## Environnement
 
@@ -24,7 +24,7 @@ Commande de contrôle :
 .venv/bin/python -m unittest -v test_agent.py
 ```
 
-Résultat final : 30 tests en 0,002 s, aucun échec. Les tests ciblant le
+Résultat final : 32 tests, aucun échec. Les tests ciblant le
 remboursement, le renoncement et le routage ont également réussi.
 
 ## Scénarios d'acceptation

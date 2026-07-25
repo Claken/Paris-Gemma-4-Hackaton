@@ -20,18 +20,22 @@ if anything here goes stale.
 
 ## Current state of the repo
 
-**Step 1 of the build order is done**: the full state machine runs end-to-end with every tool stubbed. Steps 2–6
-(real EU261 table, Gemma/SerpAPI wiring, PDF, demo, eval+writeup) are not started.
+**Steps 1 and 2 of the build order are done.** Steps 3–6 (Gemma/SerpAPI wiring, PDF, demo, eval+writeup) are not
+started.
 
 - `agent/graph.py` — orchestration loop + ASCII diagram of the whole graph in the module docstring.
-- `agent/states.py` — one function per state, `ETATS` dict at the bottom is the edge table.
-- `agent/tools.py` — the 6 tools + the Gemma-reasoning calls, **all stubbed**, driven by `SCENARIOS`.
+- `agent/states.py` — one function per state, `STATES` dict at the bottom is the edge table.
+- `agent/tools.py` — the 6 tools + the Gemma-reasoning calls. `compute_distance` / `compute_compensation` now
+  delegate to `eu261`; the rest are **stubbed**, driven by `SCENARIOS`.
+- `agent/eu261.py` — real haversine + decision table. Deterministic, no model, 41 unit tests.
 - `agent/dossier.py` — the central dossier, provenance/confidence helpers.
+- `data/airports.csv` — 118 IATA airports (EU27 + IS/NO/CH + French overseas; the UK is deliberately outside the
+  EU261 country set since 2021).
 - `spike_vision.py` — the original working Ollama vision call (proven `dpi=200` + base64 payload). Reuse it as the
   basis for the real `extract_ticket` at step 3; it is not wired into the agent.
 
-Replacing a stub means editing only the body in `tools.py` — signatures are final and no state calls a model or an
-API directly.
+Replacing a stub means editing only the body in `tools.py` — signatures are final, and no state calls a model, an
+API, or `eu261` directly.
 
 ## Commands
 

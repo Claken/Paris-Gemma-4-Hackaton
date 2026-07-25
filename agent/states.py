@@ -23,7 +23,6 @@ from agent.dossier import (
     log_action,
     lowest_confidence,
     missing_required_field,
-    unresolved_conflict,
 )
 
 # Recovery bounds, imposed by the spec.

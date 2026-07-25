@@ -1,4 +1,4 @@
-"""Orchestration loop and state machine.
+r"""Orchestration loop and state machine.
 
 No agent framework: the loop is hand-written, fits on one page, and the whole
 graph can be read in this single file.

@@ -118,7 +118,7 @@ d'inventer une valeur.
 
 - [x] **Étape 1** — graphe d'orchestration + machine à états, tous les tools bouchonnés
       (les 7 scénarios traversent le graphe)
-- [ ] **Étape 2** — `agent/eu261.py` : haversine + table de décision du barème
+- [x] **Étape 2** — `agent/eu261.py` : haversine + table de décision du barème (41 tests)
 - [ ] **Étape 3** — branchement Gemma 4 vision (ollama) et recherche de statut de vol
 - [ ] **Étape 4** — génération PDF
 - [ ] **Étape 5** — démo rejouable

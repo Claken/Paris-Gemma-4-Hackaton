@@ -20,8 +20,11 @@ if anything here goes stale.
 
 ## Current state of the repo
 
-**Steps 1 and 2 of the build order are done.** Steps 3–6 (Gemma/SerpAPI wiring, PDF, demo, eval+writeup) are not
-started.
+**Steps 1 and 2 are done and verified. Step 3 is code-complete but not fully verified end-to-end — read
+`HANDOVER.md` before touching anything.** Steps 4–6 (PDF, demo, eval+writeup) are not started.
+
+`HANDOVER.md` holds the current status, the verification gaps, the hard-won gotchas (Gemma latency, Ollama
+context size, the SerpAPI finding) and the roadmap. It is the first file to read when picking this up.
 
 - `agent/graph.py` — orchestration loop + ASCII diagram of the whole graph in the module docstring.
 - `agent/states.py` — one function per state, `STATES` dict at the bottom is the edge table.

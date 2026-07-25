@@ -1,0 +1,163 @@
+{
+  "schema_version": "1.0",
+  "airline_id": "easyjet",
+  "company": "easyJet",
+  "aliases": [
+    "easyjet",
+    "easy jet",
+    "EZY",
+    "EJU",
+    "EZS"
+  ],
+  "summary": "easyJet sépare le formulaire d'indemnisation, la demande de remboursement de dépenses et le remboursement d'un billet non utilisé dans la gestion de réservation.",
+  "supported_incidents": [
+    "flight_delay",
+    "flight_cancellation",
+    "denied_boarding"
+  ],
+  "procedures": [
+    {
+      "id": "easyjet_compensation_claim",
+      "topic": "compensation_claim",
+      "incidents": [
+        "flight_delay",
+        "flight_cancellation",
+        "denied_boarding"
+      ],
+      "purpose": "Déposer directement une demande d'indemnisation auprès d'easyJet.",
+      "channel": {
+        "type": "web_form",
+        "label": "Formulaire de demande d'indemnisation",
+        "url": "https://www.easyjet.com/claim/fr/eu261"
+      },
+      "steps": [
+        "Renseigner la réservation, le vol, la date, le motif et les aéroports.",
+        "Compléter les coordonnées du demandeur telles qu'elles figurent dans la réservation.",
+        "Indiquer les passagers concernés et les informations de paiement demandées.",
+        "Ajouter, si utile, un justificatif accepté par le formulaire.",
+        "Vérifier les informations avant l'envoi, car elles ne sont plus modifiables après soumission."
+      ],
+      "required_information": [
+        "référence de réservation",
+        "numéro et date du vol",
+        "motif de la réclamation",
+        "aéroports de départ et d'arrivée",
+        "coordonnées correspondant à la réservation",
+        "passagers concernés",
+        "pays du compte bancaire et devise souhaitée"
+      ],
+      "required_documents": [
+        "document justificatif pertinent facultatif, par exemple confirmation de réservation"
+      ],
+      "source_ids": [
+        "easyjet_compensation_form"
+      ],
+      "limits": [
+        "Les justificatifs sont facultatifs sur le formulaire public et doivent respecter les formats et la taille indiqués sur celui-ci.",
+        "Ce formulaire ne rembourse pas un billet non utilisé."
+      ]
+    },
+    {
+      "id": "easyjet_disruption_expenses",
+      "topic": "disruption_expense_refund",
+      "incidents": [
+        "flight_delay",
+        "flight_cancellation"
+      ],
+      "purpose": "Demander le remboursement de dépenses occasionnées par une perturbation.",
+      "channel": {
+        "type": "web_form",
+        "label": "Remboursement des dépenses",
+        "url": "https://www.easyjet.com/fr/expenses"
+      },
+      "steps": [
+        "Ouvrir le formulaire de remboursement des dépenses.",
+        "Sélectionner la demande relative aux achats dans les informations supplémentaires.",
+        "Renseigner les informations de vol et le total demandé.",
+        "Joindre un reçu pour chaque dépense.",
+        "Envoyer la demande en ligne ; ce type de demande n'est pas traité par téléphone."
+      ],
+      "required_information": [
+        "date et numéro du vol",
+        "montant total demandé",
+        "adresse postale",
+        "nombre de jours de retard",
+        "nombre de passagers concernés"
+      ],
+      "required_documents": [
+        "reçu numérisé, scanné ou photographié pour chaque dépense"
+      ],
+      "source_ids": [
+        "easyjet_expenses"
+      ],
+      "limits": [
+        "La compagnie vérifie séparément le caractère remboursable des dépenses ; la fiche ne préjuge pas du résultat."
+      ]
+    },
+    {
+      "id": "easyjet_unused_ticket_refund",
+      "topic": "unused_ticket_refund",
+      "incidents": [
+        "flight_delay",
+        "flight_cancellation"
+      ],
+      "purpose": "Orienter le remboursement d'un billet non utilisé vers la gestion de réservation.",
+      "channel": {
+        "type": "booking_portal",
+        "label": "Vos réservations",
+        "url": "https://www.easyjet.com/fr/secure/MyEasyJet.mvc/SignIn"
+      },
+      "steps": [
+        "Ouvrir « Vos réservations » et identifier la réservation.",
+        "Choisir l'option de remboursement proposée pour le vol concerné.",
+        "Ne pas utiliser le formulaire d'indemnisation pour le remboursement du billet."
+      ],
+      "required_information": [
+        "données permettant d'accéder à la réservation"
+      ],
+      "required_documents": [],
+      "source_ids": [
+        "easyjet_compensation_form",
+        "easyjet_disruptions"
+      ],
+      "limits": [
+        "Le portail est dynamique et les options disponibles dépendent de la réservation.",
+        "La fiche décrit le canal, pas les conditions juridiques d'accès au remboursement."
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "easyjet_compensation_form",
+      "title": "Formulaire de demande d'indemnisation",
+      "url": "https://www.easyjet.com/claim/fr/eu261",
+      "official": true,
+      "verified_on": "2026-07-25"
+    },
+    {
+      "id": "easyjet_expenses",
+      "title": "Formulaire de remboursement des dépenses",
+      "url": "https://www.easyjet.com/fr/expenses",
+      "official": true,
+      "verified_on": "2026-07-25"
+    },
+    {
+      "id": "easyjet_disruptions",
+      "title": "Retards et annulations",
+      "url": "https://www.easyjet.com/fr/aide/embarquement-et-vol/retards-et-annulations",
+      "official": true,
+      "verified_on": "2026-07-25"
+    }
+  ],
+  "freshness": {
+    "verified_on": "2026-07-25",
+    "max_age_days": 90,
+    "recheck_after": "2026-10-23",
+    "recheck_triggers": [
+      "HTTP error or redirect",
+      "claim, expense, or booking channel changed",
+      "required form fields changed"
+    ]
+  },
+  "legal_scope": "Procédure de compagnie uniquement. Cette fiche ne décide pas de l'éligibilité EU261 et ne garantit aucun remboursement ou indemnisation."
+}

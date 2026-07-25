@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Droit de Retard</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #132019;
+      --muted: #607067;
+      --paper: #f6f4ed;
+      --card: #fffdf7;
+      --line: #d8d9cf;
+      --green: #176b4d;
+      --green-soft: #dff1e8;
+      --amber: #9a5a13;
+      --amber-soft: #fff0d6;
+      --red: #a33a31;
+      --shadow: 0 16px 45px rgba(19, 32, 25, .09);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 10% 0%, #dceadf 0, transparent 34rem),
+        var(--paper);
+      color: var(--ink);
+      font: 16px/1.55 Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+    main { width: min(1120px, calc(100% - 32px)); margin: 0 auto 72px; }
+    header { padding: 56px 0 32px; }
+    .eyebrow {
+      color: var(--green); font-size: 12px; font-weight: 800;
+      letter-spacing: .14em; text-transform: uppercase;
+    }
+    h1 { margin: 8px 0 6px; font: 700 clamp(40px, 7vw, 76px)/1.03 Georgia, serif; }
+    h2 { margin: 0 0 16px; font: 700 28px/1.2 Georgia, serif; }
+    h3 { margin: 0 0 10px; font-size: 17px; }
+    p { margin: 0; }
+    .lead { max-width: 720px; color: var(--muted); font-size: 18px; }
+    .grid { display: grid; grid-template-columns: .9fr 1.1fr; gap: 22px; }
+    .card {
+      border: 1px solid var(--line); border-radius: 18px; background: var(--card);
+      box-shadow: var(--shadow); padding: 24px;
+    }
+    label { display: block; margin: 16px 0 7px; font-weight: 700; font-size: 14px; }
+    input, textarea {
+      width: 100%; border: 1px solid #bfc5bc; border-radius: 10px;
+      background: white; padding: 12px 13px; color: var(--ink); font: inherit;
+    }
+    textarea { min-height: 112px; resize: vertical; }
+    input:focus, textarea:focus { outline: 3px solid #b9ddca; border-color: var(--green); }
+    button {
+      width: 100%; margin-top: 20px; border: 0; border-radius: 12px;
+      background: var(--green); color: white; padding: 14px 18px;
+      font: 800 16px/1 system-ui, sans-serif; cursor: pointer;
+    }
+    button:hover { background: #10583e; }
+    button:disabled { cursor: wait; opacity: .65; }
+    .note { margin-top: 16px; color: var(--muted); font-size: 13px; }
+    .placeholder {
+      min-height: 420px; display: grid; place-items: center; text-align: center;
+      color: var(--muted); border: 1px dashed #bfc5bc; border-radius: 14px;
+      padding: 32px;
+    }
+    .loader {
+      width: 34px; height: 34px; margin: 0 auto 16px; border-radius: 50%;
+      border: 4px solid #c8d6cd; border-top-color: var(--green);
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .badge {
+      display: inline-flex; align-items: center; border-radius: 999px;
+      padding: 5px 10px; font-size: 12px; font-weight: 800;
+      background: var(--green-soft); color: var(--green);
+    }
+    .badge.warn { background: var(--amber-soft); color: var(--amber); }
+    .badge.bad { background: #f8dfdc; color: var(--red); }
+    .badge.neutral { background: #e8ebe7; color: #465149; }
+    .section { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--line); }
+    .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; }
+    .fact { padding: 8px 0; border-bottom: 1px solid #ecece5; }
+    .fact small { display: block; color: var(--muted); }
+    ul { margin: 8px 0 0; padding-left: 20px; }
+    .trace { list-style: none; padding: 0; }
+    .trace li { position: relative; margin: 0 0 10px; padding: 10px 12px 10px 34px; background: #f1f3ed; border-radius: 10px; }
+    .trace li::before { content: "✓"; position: absolute; left: 12px; color: var(--green); font-weight: 900; }
+    pre {
+      white-space: pre-wrap; overflow-wrap: anywhere; margin: 10px 0 0;
+      border-radius: 12px; background: #f1f3ed; padding: 16px; font: 14px/1.55 ui-monospace, monospace;
+    }
+    a { color: var(--green); }
+    .error { color: var(--red); font-weight: 700; }
+    footer { margin-top: 18px; color: var(--muted); font-size: 12px; text-align: center; }
+    @media (max-width: 800px) {
+      .grid { grid-template-columns: 1fr; }
+      header { padding-top: 32px; }
+      .facts { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Gemma 4 · agent local-first</div>
+    <h1>Droit de Retard</h1>
+    <p class="lead">Du justificatif au dossier de réclamation, avec des faits vérifiables et une récupération explicite lorsque la recherche web tombe.</p>
+  </header>
+
+  <div class="grid">
+    <form id="form" class="card">
+      <h2>Analyser un vol</h2>
+      <p class="note">Le document reste envoyé uniquement à votre Ollama local.</p>
+
+      <label for="document">Billet ou justificatif</label>
+      <input id="document" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" required>
+
+      <label for="incident">Que s'est-il passé ?</label>
+      <textarea id="incident" placeholder="Ex. Le vol est arrivé avec 3 h 25 de retard. La compagnie a évoqué un problème technique."></textarea>
+
+      <label for="reference">Référence confirmée (optionnel)</label>
+      <input id="reference" placeholder="Ex. FQ7T2K" autocomplete="off">
+
+      <button id="submit" type="submit">Construire le dossier</button>
+      <p class="note">Prototype informatif : il ne remplace pas un conseil juridique et ne garantit aucune indemnisation.</p>
+    </form>
+
+    <section id="result" class="card" aria-live="polite">
+      <div class="placeholder">
+        <div>
+          <strong>Le dossier apparaîtra ici.</strong>
+          <p>Commencez avec un billet seul pour voir l'agent demander la preuve manquante.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+  <footer>Les déclarations du voyageur, le document et les sources juridiques restent distingués.</footer>
+</main>
+
+<script>
+  const form = document.querySelector("#form");
+  const result = document.querySelector("#result");
+  const submit = document.querySelector("#submit");
+
+  const element = (tag, text, className) => {
+    const node = document.createElement(tag);
+    if (text !== undefined && text !== null) node.textContent = String(text);
+    if (className) node.className = className;
+    return node;
+  };
+
+  const addList = (parent, items) => {
+    const list = element("ul");
+    for (const item of items || []) list.append(element("li", item));
+    parent.append(list);
+  };
+
+  const statusMeta = status => ({
+    ready_for_research: ["Dossier analysé", ""],
+    ready_for_claim: ["Réclamation préparée", ""],
+    likely: ["Éligibilité probable", ""],
+    conditional: ["Résultat conditionnel", "warn"],
+    needs_information: ["Informations manquantes", "warn"],
+    non_eligible: ["Non éligible", "bad"],
+    not_assessed: ["Non évalué", "neutral"],
+    online: ["Vérifié en ligne", ""],
+    offline: ["Mode dégradé", "warn"],
+    gemma_tool_calls: ["Function calling Gemma", ""],
+    deterministic_fallback: ["Fallback déterministe", "warn"],
+    demo_carrier: ["Compagnie de démonstration", "neutral"],
+    ok: ["Terminé", ""]
+  }[status] || [String(status || "État inconnu"), "neutral"]);
+
+  const fileAsBase64 = file => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => resolve(String(reader.result).split(",")[1]);
+    reader.readAsDataURL(file);
+  });
+
+  function render(data) {
+    result.replaceChildren();
+    const decision = data.decision;
+    const [decisionLabel, decisionClass] = statusMeta(decision.status);
+    const status = element("span", decisionLabel, `badge ${decisionClass}`);
+    result.append(status, element("h2", decision.message));
+
+    if (data.qualification) {
+      const qualification = element("div", null, "section");
+      const [label, className] = statusMeta(data.qualification.status);
+      qualification.append(element("h3", "Indemnisation EU261"));
+      qualification.append(element("span", label, `badge ${className}`));
+      const amount = data.qualification.compensation_eur;
+      qualification.append(element(
+        "p",
+        `${data.qualification.distance_km ?? "?"} km · ${
+          amount === undefined ? "montant non calculable" : `${amount} € potentiels`
+        }`
+      ));
+      qualification.append(element("p", data.qualification.reason, "note"));
+      result.append(qualification);
+    }
+
+    if (data.reimbursement) {
+      const reimbursement = element("div", null, "section");
+      const [label, className] = statusMeta(data.reimbursement.status);
+      reimbursement.append(element("h3", "Remboursement du billet"));
+      reimbursement.append(element("span", label, `badge ${className}`));
+      reimbursement.append(element("p", data.reimbursement.reason, "note"));
+      result.append(reimbursement);
+    }
+
+    if (data.qualification && data.reimbursement) {
+      result.append(element(
+        "p",
+        "L’indemnisation et le remboursement du billet sont deux droits évalués séparément.",
+        "note"
+      ));
+    }
+
+    const factsSection = element("div", null, "section");
+    factsSection.append(element("h3", "Faits extraits"));
+    const facts = element("div", null, "facts");
+    const labels = {
+      passenger_name: "Passager", airline: "Compagnie", flight_number: "Vol",
+      origin: "Départ", destination: "Arrivée", departure_date: "Date",
+      scheduled_departure: "Heure prévue",
+      arrival_delay_minutes: "Retard à l’arrivée (min)",
+      departure_delay_minutes: "Retard au départ (min)",
+      trip_completed: "Voyage effectué",
+      booking_reference: "Référence lue"
+    };
+    for (const [key, label] of Object.entries(labels)) {
+      const fact = element("div", null, "fact");
+      fact.append(element("small", label), element("strong", data.extraction[key] ?? "Non renseigné"));
+      facts.append(fact);
+    }
+    factsSection.append(facts);
+    if ((data.extraction.uncertain_fields || []).length) {
+      factsSection.append(element("p", "⚠ Certains champs doivent être confirmés.", "note"));
+    }
+    result.append(factsSection);
+
+    if (decision.questions?.length) {
+      const questions = element("div", null, "section");
+      questions.append(element("h3", "Prochaine information nécessaire"));
+      addList(questions, decision.questions);
+      result.append(questions);
+    }
+
+    if (data.research) {
+      const research = element("div", null, "section");
+      const offline = data.research.rights.status !== "online";
+      research.append(element("h3", "Vérification des règles"));
+      research.append(element("span", offline ? "Mode dégradé" : "Sources vérifiées en direct", `badge ${offline ? "warn" : ""}`));
+      const sourceList = element("ul");
+      for (const source of data.research.rights.sources || []) {
+        const item = element("li");
+        const link = element("a", source.title);
+        link.href = source.link;
+        link.target = "_blank";
+        link.rel = "noreferrer";
+        item.append(link);
+        sourceList.append(item);
+      }
+      research.append(sourceList);
+      result.append(research);
+    }
+
+    if (data.claim) {
+      const claim = element("div", null, "section");
+      claim.append(element("h3", data.claim.summary));
+      addList(claim, data.claim.warnings);
+      claim.append(element("h3", data.claim.letter_subject));
+      claim.append(element("pre", data.claim.letter_body));
+      claim.append(element("h3", "Checklist"));
+      addList(claim, data.claim.checklist);
+      result.append(claim);
+    }
+
+    if (data.refusal) {
+      const refusal = element("div", null, "section");
+      refusal.append(element("h3", data.refusal.title));
+      refusal.append(element("p", data.refusal.explanation));
+      if (data.refusal.rule) refusal.append(element("p", data.refusal.rule, "note"));
+      result.append(refusal);
+    }
+
+    const trace = element("div", null, "section");
+    trace.append(element("h3", "Trace de l'agent"));
+    const traceList = element("ul", null, "trace");
+    for (const step of data.trace || []) {
+      const timing = step.duration_seconds ? ` · ${step.duration_seconds} s` : "";
+      const [outcomeLabel] = statusMeta(step.outcome);
+      const item = element("li");
+      item.append(element(
+        "strong",
+        `${step.state || step.step} — ${outcomeLabel}${timing}`
+      ));
+      if (step.tool) item.append(element("p", `Outil : ${step.tool}`, "note"));
+      if (step.selected_by) {
+        item.append(element(
+          "p",
+          `Sélection : ${
+            step.selected_by === "gemma_tool_call"
+              ? "Gemma (tool_call)"
+              : "fallback déterministe"
+          }`,
+          "note"
+        ));
+      }
+      if (step.details) item.append(element("p", step.details, "note"));
+      if (step.requested_tool_calls !== undefined) {
+        item.append(element(
+          "p",
+          `${step.requested_tool_calls} appel(s) demandé(s) · ${
+            step.rejected_tool_calls || 0
+          } rejeté(s) · ${step.tool_result_round_trips || 0} retour(s) outil`,
+          "note"
+        ));
+      }
+      if (step.fallback !== undefined) {
+        item.append(element(
+          "p",
+          `Fallback déterministe : ${step.fallback ? "oui" : "non"}`,
+          "note"
+        ));
+      }
+      traceList.append(item);
+    }
+    trace.append(traceList);
+    result.append(trace);
+  }
+
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    const file = document.querySelector("#document").files[0];
+    if (!file) return;
+    submit.disabled = true;
+    submit.textContent = "Analyse en cours…";
+    result.innerHTML = '<div class="placeholder"><div><div class="loader"></div><strong>Gemma lit le document…</strong><p>Le pipeline local peut prendre environ une minute.</p></div></div>';
+    try {
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          filename: file.name,
+          file_base64: await fileAsBase64(file),
+          incident: document.querySelector("#incident").value,
+          booking_reference: document.querySelector("#reference").value
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Analyse impossible.");
+      render(data);
+    } catch (error) {
+      result.replaceChildren(element("p", error.message, "error"));
+    } finally {
+      submit.disabled = false;
+      submit.textContent = "Construire le dossier";
+    }
+  });
+</script>
+</body>
+</html>

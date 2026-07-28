@@ -1,0 +1,152 @@
+{
+  "schema_version": "1.0",
+  "airline_id": "tap_air_portugal",
+  "company": "TAP Air Portugal",
+  "aliases": [
+    "tap",
+    "tap air portugal",
+    "TP",
+    "TAP"
+  ],
+  "summary": "TAP propose un formulaire de réclamation pour l'indemnisation et les dépenses, ainsi qu'un parcours séparé pour le remboursement d'un billet non utilisé.",
+  "supported_incidents": [
+    "flight_delay",
+    "flight_cancellation",
+    "flight_rescheduling"
+  ],
+  "procedures": [
+    {
+      "id": "tap_compensation_claim",
+      "topic": "compensation_claim",
+      "incidents": [
+        "flight_delay",
+        "flight_cancellation"
+      ],
+      "purpose": "Déposer une demande d'indemnisation auprès de TAP.",
+      "channel": {
+        "type": "web_form",
+        "label": "Réclamations TAP",
+        "url": "https://www.flytap.com/fr-fr/aide/demandes-reclamations/reclamation"
+      },
+      "steps": [
+        "Ouvrir le formulaire de réclamations.",
+        "Choisir « Faire une nouvelle réclamation ».",
+        "Décrire l'incident et compléter les informations demandées.",
+        "Conserver le numéro de réclamation pour en vérifier ensuite l'état."
+      ],
+      "required_information": [
+        "informations demandées par le formulaire selon le motif"
+      ],
+      "required_documents": [],
+      "source_ids": [
+        "tap_disruptions",
+        "tap_claim_form"
+      ],
+      "limits": [
+        "Les champs détaillés d'une nouvelle réclamation sont chargés dynamiquement et ne sont pas tous énumérés sur la page publique."
+      ]
+    },
+    {
+      "id": "tap_disruption_expenses",
+      "topic": "disruption_expense_refund",
+      "incidents": [
+        "flight_delay",
+        "flight_cancellation",
+        "flight_rescheduling"
+      ],
+      "purpose": "Demander l'examen des dépenses engagées pendant l'attente d'un vol alternatif.",
+      "channel": {
+        "type": "web_form",
+        "label": "Réclamations TAP",
+        "url": "https://www.flytap.com/fr-fr/aide/demandes-reclamations/reclamation"
+      },
+      "steps": [
+        "Ouvrir le formulaire de réclamations.",
+        "Renseigner le vol perturbé et les passagers concernés.",
+        "Joindre les factures de dépenses et le justificatif bancaire demandé.",
+        "Envoyer la demande et conserver le numéro de réclamation."
+      ],
+      "required_information": [
+        "nom des passagers figurant sur la réservation",
+        "numéro, date, origine et destination du vol perturbé",
+        "numéro de billet de chaque passager concerné"
+      ],
+      "required_documents": [
+        "copies des factures de dépenses",
+        "justificatif bancaire comportant les coordonnées du compte et le nom du titulaire"
+      ],
+      "source_ids": [
+        "tap_disruptions"
+      ],
+      "limits": [
+        "La compagnie examine les dépenses après soumission ; la fiche ne préjuge pas de leur acceptation."
+      ]
+    },
+    {
+      "id": "tap_unused_ticket_refund",
+      "topic": "unused_ticket_refund",
+      "incidents": [
+        "flight_delay",
+        "flight_cancellation"
+      ],
+      "purpose": "Demander le remboursement d'un trajet non effectué via le parcours de réservation.",
+      "channel": {
+        "type": "booking_portal",
+        "label": "Remboursements TAP",
+        "url": "https://myb.flytap.com/refunds"
+      },
+      "steps": [
+        "Ouvrir le portail officiel de remboursement.",
+        "Identifier la réservation concernée.",
+        "Choisir le remboursement du billet non utilisé.",
+        "Suivre l'état de la demande depuis le canal TAP approprié."
+      ],
+      "required_information": [
+        "données permettant d'identifier la réservation"
+      ],
+      "required_documents": [],
+      "source_ids": [
+        "tap_disruptions",
+        "tap_refunds"
+      ],
+      "limits": [
+        "Le portail de remboursement est dynamique.",
+        "La fiche décrit le canal, pas les conditions juridiques d'accès au remboursement."
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "tap_disruptions",
+      "title": "Retards et annulations de vols",
+      "url": "https://www.flytap.com/fr-fr/aide/retards-annulations",
+      "official": true,
+      "verified_on": "2026-07-25"
+    },
+    {
+      "id": "tap_claim_form",
+      "title": "Réclamations",
+      "url": "https://www.flytap.com/fr-fr/aide/demandes-reclamations/reclamation",
+      "official": true,
+      "verified_on": "2026-07-25"
+    },
+    {
+      "id": "tap_refunds",
+      "title": "Remboursements TAP",
+      "url": "https://www.flytap.com/fr-fr/aide/remboursements-tap",
+      "official": true,
+      "verified_on": "2026-07-25"
+    }
+  ],
+  "freshness": {
+    "verified_on": "2026-07-25",
+    "max_age_days": 90,
+    "recheck_after": "2026-10-23",
+    "recheck_triggers": [
+      "HTTP error or redirect",
+      "claim or refund channel changed",
+      "required evidence changed"
+    ]
+  },
+  "legal_scope": "Procédure de compagnie uniquement. Cette fiche ne décide pas de l'éligibilité EU261 et ne garantit aucun remboursement ou indemnisation."
+}

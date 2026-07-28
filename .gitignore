@@ -1,20 +1,7 @@
-# Python-generated files
-__pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
-
-# Virtual environments
-.venv
-
-# Secrets -- never commit. Use .env.example as the template.
 .env
-.env.local
-
-# Agent output
-out/
-
-# WSL/Windows metadata streams
-*:Zone.Identifier
+.venv/
+__pycache__/
+*.py[cod]
+tmp/
+output/
+.DS_Store

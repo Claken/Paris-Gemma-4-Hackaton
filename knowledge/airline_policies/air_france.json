@@ -1,0 +1,78 @@
+{
+  "schema_version": "1.0",
+  "airline_id": "air_france",
+  "company": "Air France",
+  "aliases": [
+    "air france",
+    "AF",
+    "AFR"
+  ],
+  "summary": "Air France centralise les demandes de remboursement, d'avoir et d'indemnisation dans un parcours web qui demande d'abord de sélectionner le motif.",
+  "supported_incidents": [
+    "flight_delay",
+    "flight_cancellation",
+    "denied_boarding"
+  ],
+  "procedures": [
+    {
+      "id": "air_france_refund_or_compensation",
+      "topic": "refund_or_compensation_request",
+      "incidents": [
+        "flight_delay",
+        "flight_cancellation",
+        "denied_boarding"
+      ],
+      "purpose": "Orienter vers le parcours officiel de demande de remboursement, d'avoir ou d'indemnisation.",
+      "channel": {
+        "type": "web_form_router",
+        "label": "Remboursement, avoir et indemnisation",
+        "url": "https://wwws.airfrance.fr/contact/topic/refund-compensation"
+      },
+      "steps": [
+        "Ouvrir le parcours officiel Air France.",
+        "Sélectionner le motif correspondant à la demande.",
+        "Suivre les étapes affichées par le formulaire dynamique.",
+        "Adresser la demande au transporteur qui a opéré ou devait opérer le vol."
+      ],
+      "required_information": [
+        "motif de la demande"
+      ],
+      "required_documents": [],
+      "source_ids": [
+        "af_refund_hub",
+        "af_passenger_rights"
+      ],
+      "limits": [
+        "La page publique ne donne pas une liste stable et exhaustive des pièces : le formulaire les demande selon le motif choisi.",
+        "Le canal est un routeur dynamique et peut nécessiter une nouvelle vérification avant automatisation."
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "id": "af_refund_hub",
+      "title": "Remboursement, avoir et indemnisation",
+      "url": "https://wwws.airfrance.fr/information/legal/remboursement",
+      "official": true,
+      "verified_on": "2026-07-25"
+    },
+    {
+      "id": "af_passenger_rights",
+      "title": "Droits des passagers — demandes et contact",
+      "url": "https://wwws.airfrance.fr/information/legal/assistance-et-indemnisation",
+      "official": true,
+      "verified_on": "2026-07-25"
+    }
+  ],
+  "freshness": {
+    "verified_on": "2026-07-25",
+    "max_age_days": 90,
+    "recheck_after": "2026-10-23",
+    "recheck_triggers": [
+      "HTTP error or redirect",
+      "claim channel changed",
+      "dynamic form fields changed"
+    ]
+  },
+  "legal_scope": "Procédure de compagnie uniquement. Cette fiche ne décide pas de l'éligibilité EU261 et ne garantit aucun remboursement ou indemnisation."
+}

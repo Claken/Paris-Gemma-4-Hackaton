@@ -1,139 +1,204 @@
-# EU261 Claim Agent
+# Droit de Retard
 
-> Gemma 4 Hackathon — 42 Paris — Track 02 « Autonomous Agents »
-> *Does it survive contact with failure?*
+Assistant local de préparation de réclamations aériennes EU261, présenté au
+**Gemma 4 Hackathon — Track 02: Autonomous Agents**.
 
-Un agent **100 % local** qui instruit un dossier d'indemnisation aérienne (règlement CE n° 261/2004)
-à partir d'une photo de billet, sous preuves incertaines — et qui a le droit de conclure que vous
-n'avez droit à rien.
+À partir d'un billet PDF ou image, le prototype extrait les faits avec Gemma 4,
+demande les informations manquantes, recherche des sources officielles et
+calcule une indemnisation potentielle avec des règles Python déterministes. Il
+peut refuser de générer une lettre et continue prudemment lorsque la recherche
+web est indisponible.
 
-Ce n'est pas un générateur de lettres. La lettre est la sortie triviale. La valeur est dans la
-**qualification juridique sous information incomplète** et dans le **comportement de l'agent quand
-ses sources échouent**.
+> Ce prototype est informatif : il ne fournit pas de conseil juridique, ne
+> représente pas le passager et ne garantit aucune indemnisation.
 
-**Pourquoi local ?** Les acteurs existants (AirHelp, Flightright) prennent ~35 % de commission. Ici
-la pièce d'identité, le billet et l'IBAN ne quittent jamais la machine, et l'agent dit gratuitement
-quand le dossier est perdu d'avance.
+## Pourquoi un agent ?
 
----
+Le résultat n'est pas systématiquement une lettre. Le pipeline choisit entre :
 
-## Démarrage
+- demander le retard à l'arrivée ou une autre preuve manquante ;
+- rechercher les règles et le canal de réclamation ;
+- expliquer une non-éligibilité sans produire de lettre ;
+- préparer une demande conditionnelle si les sources en direct sont
+  indisponibles.
+
+Le function calling natif Gemma/Ollama pilote les recherches. Gemma reçoit les
+schémas JSON stricts des deux outils, produit `message.tool_calls`, puis un
+dispatcher Python en liste blanche valide le nom et exige exactement les
+arguments issus du contexte minimisé. Les résultats sont renvoyés au modèle
+avec le rôle `tool` lorsqu'un second tour est nécessaire. Si un appel manque,
+est invalide ou n'est pas produit, un fallback déterministe exécute uniquement
+les outils autorisés et rend cette récupération visible dans la trace.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    A["Billet PDF ou image"] --> B["Gemma 4 Vision<br>JSON strict"]
+    B --> C{"Routeur déterministe"}
+    C -->|Faits manquants| D["Question ciblée"]
+    C -->|Dossier suffisant| E["Gemma sélectionne<br>les outils"]
+    E --> F{"Validation stricte<br>et liste blanche"}
+    F -->|Valide| K["Exécution des outils"]
+    F -->|Absent ou rejeté| L["Fallback déterministe"]
+    K -->|En ligne| M["Sources vérifiées"]
+    K -->|Échec réseau| G["Mode dégradé"]
+    L --> K
+    M --> H["Calcul EU261 Python"]
+    G --> H
+    H -->|Sous le seuil| I["Explication, sans lettre"]
+    H -->|Potentiel| J["Gemma 4 rédige<br>au conditionnel"]
+```
+
+Gemma lit le document et rédige. Le code conserve la responsabilité des
+seuils, de la distance, du montant et des branches de sécurité.
+
+| Fichier | Rôle |
+| --- | --- |
+| `agent.py` | Extraction multimodale, routage, recherche, rédaction et trace |
+| `eu261.py` | Distance et qualification EU261 simplifiées |
+| `tools.py` | Recherche SerpApi minimisée et récupération hors ligne |
+| `app.py` | Serveur HTTP local sans dépendance Python externe |
+| `static/index.html` | Interface de démonstration |
+| `test_agent.py` | Tests déterministes |
+
+## Prérequis
+
+- Python 3.10 ou supérieur ;
+- [Ollama](https://ollama.com/) avec `gemma4:12b` ;
+- Poppler pour lire un PDF (`brew install poppler` sur macOS) ; les images
+  PNG, JPEG et WEBP n'en ont pas besoin ;
+- FFmpeg pour la dictée locale optionnelle (`brew install ffmpeg`) ;
+- une clé SerpApi facultative pour la vérification en direct.
+
+Le code d'exécution utilise uniquement la bibliothèque standard Python.
+
+## Installation
+
+Depuis un checkout du dépôt :
 
 ```bash
-uv sync
-uv run main.py                            # scénario nominal, trace complète des transitions
-uv run main.py --scenario not_eligible    # l'agent refuse et motive son refus
-uv run main.py --scenario source_failure  # source externe coupée → mode dégradé
+cd Gemma4-hackathon
+python3 -m venv .venv
+source .venv/bin/activate
 
-uv run tests/test_eu261.py                # table de décision EU261 (aucune dépendance)
+ollama pull gemma4:12b
+ollama serve
 ```
 
-Chaque exécution écrit le journal complet du dossier dans `out/dossier_<scenario>.json` :
-horodatage, état, action, résultat, source et confiance de chaque fait retenu.
+Dans un second terminal :
 
----
-
-## Le graphe
-
-```
-INIT
- |
- v
-EXTRACTION <--------+ (JSON invalide, max 2 tentatives)
- |  |               |
- |  +---------------+
- |  \--(échec définitif)--> ASK_USER
- v
-VALIDATION_CHAMPS <-----------------+
- |  \--(champ manquant / peu sûr)--> ASK_USER
- v                                   |
-RECHERCHE_VOL <---+ (réseau KO, max 2 retries)
- |  |             |
- |  +-------------+
- |  \--(échec définitif)--> MODE_DEGRADE --+
- v                                         |
-CONSOLIDATION_PREUVES                      |
- |  \--(contradiction)--> ASK_USER --------+
- v                                         |
-QUALIFICATION_EU261 <----------------------+
- |  \--(non éligible)--> EXPLICATION_REFUS --> FIN   [aucune lettre]
- |  \--(preuves faibles)--> REDACTION_CONDITIONNELLE --+
- v                                                     |
-REDACTION <---------------------------------------+    |
- |                                                |    |
- v                                                |    |
-AUTO_VERIFICATION --(non conforme, max 2 boucles)-+<---+
- |
- v
-GENERATION_PDF --> FIN
+```bash
+cd Gemma4-hackathon
+source .venv/bin/activate
+export DR_MODEL=gemma4:12b
 ```
 
-Pas de LangChain ni LangGraph : la boucle d'orchestration est écrite à la main dans
-[`agent/graph.py`](agent/graph.py) et tient en une page.
+Pour activer la recherche, exportez `SERPAPI_KEY` dans le processus de lancement
+ou renseignez le fichier `.env` local ignoré par Git. La variable
+d'environnement est prioritaire. Ne placez jamais de clé dans le code, une
+commande enregistrée ou une capture de la démo.
 
----
+## Lancer la démo
 
-## Principes
+### Interface web
 
-| Principe | Conséquence dans le code |
-|---|---|
-| **Le LLM décide, le code calcule** | Distance (haversine) et montant (table de décision) sont du Python pur, jamais générés par le modèle |
-| **L'agent doit pouvoir échouer proprement** | `EXPLICATION_REFUS` produit une explication motivée et **aucune lettre** |
-| **Rien sans provenance** | Chaque fait porte `source` + `confiance` (`haute`/`moyenne`/`basse`/`nulle`) |
-| **Chaque échec a une transition** | Toute boucle est bornée par une constante en tête de `agent/states.py` |
+```bash
+./demo.sh
+```
 
-Un agent qui repose éternellement la même question n'a pas survécu à l'échec, il l'a subi :
-après deux demandes sans réponse exploitable, l'agent **renonce en l'expliquant** plutôt que
-d'inventer une valeur.
+Ce script vérifie Ollama, précharge `gemma4:12b`, démarre l'application et
+ouvre le navigateur. Le lancement manuel reste disponible avec
+`.venv/bin/python app.py`.
 
----
+Ouvrez [http://127.0.0.1:7865](http://127.0.0.1:7865), chargez
+`billet_avion_fictif.pdf`, puis décrivez l'incident :
 
-## Scénarios
+```text
+Le vol est arrivé avec 3 h 25 de retard après un problème technique.
+```
 
-| Scénario | Ce qu'il prouve |
-|---|---|
-| `nominal` | Le chemin heureux fonctionne de bout en bout → 400 € |
-| `source_failure` | 3 essais réseau visibles, bascule en mode dégradé, lettre au **conditionnel** demandant confirmation au transporteur |
-| `not_eligible` | Retard de 2 h 10 → refus motivé citant le seuil des 3 h, **aucune lettre générée** |
-| `conflicting_evidence` | Utilisateur 4 h vs source web 2 h → conflit exposé, arbitrage demandé, **jamais tranché en silence** |
-| `blurry_ticket` | Date illisible → l'agent la demande au lieu de l'inventer |
-| `malformed_json` | 2 réponses modèle inexploitables → bascule en saisie manuelle |
-| `user_gives_up` | Utilisateur muet → l'agent renonce proprement |
+La référence lue sur le billet doit être confirmée manuellement avant d'être
+utilisée dans la lettre.
 
----
+Le bouton **Dicter avec Gemma** enregistre au maximum 20 secondes, convertit
+l'audio localement en WAV puis demande à `gemma4:12b` de le transcrire. Aucun
+audio n'est envoyé à un service cloud et aucun fichier n'est conservé. La
+transcription doit être relue et confirmée avant l'analyse. Cette fonction est
+optionnelle : la saisie manuelle reste toujours disponible.
 
-## Ce que Gemma 4 fait ici, et qu'on ne peut pas remplacer
+### Ligne de commande
 
-1. **Lecture multimodale du billet en local** : photo → JSON structuré avec un niveau de confiance
-   par champ, sans OCR externe et sans qu'aucune donnée personnelle ne quitte la machine. Un modèle
-   hébergé casserait la promesse de confidentialité qui est le différenciateur du projet.
-2. **Arbitrage sémantique** entre le déclaratif de l'utilisateur et des extraits de recherche non
-   structurés : décider si deux formulations décrivent le même fait ou se contredisent. C'est du
-   raisonnement, pas de la comparaison de chaînes.
-3. **Auto-critique de la lettre produite**, avec détection des faits absents du dossier.
+```bash
+.venv/bin/python agent.py billet_avion_fictif.pdf \
+  --incident "Le vol est arrivé avec 3 h 25 de retard." \
+  --booking-reference FQ7T2K
+```
 
----
+Le scénario fictif CDG–LIS illustre une indemnisation **potentielle** de 250 €
+pour un retard déclaré à l'arrivée de 3 h 25. Le remboursement du billet est
+évalué séparément. Pour un retard, le départ doit avoir été décalé d'au moins
+5 heures **et** le passager doit déclarer avoir renoncé au voyage. Si ce choix
+n'est pas renseigné, le résultat reste `needs_information` et l'agent pose la
+question ; il ne déduit pas un remboursement du seul retard. Aurora Airlines
+étant fictive, le prototype n'invente aucun formulaire réel.
 
-## État d'avancement
+Lors d'une exécution en ligne validée, Gemma a produit les deux `tool_calls`,
+SerpApi a répondu, la qualification interne a pris le statut `likely` pour
+250 € potentiels et le pipeline a duré environ 51 secondes. Cette mesure décrit
+un passage sur la configuration de démonstration, pas une garantie de latence
+ou d'éligibilité.
 
-- [x] **Étape 1** — graphe d'orchestration + machine à états, tous les tools bouchonnés
-      (les 7 scénarios traversent le graphe)
-- [x] **Étape 2** — `agent/eu261.py` : haversine + table de décision du barème (41 tests)
-- [ ] **Étape 3** — branchement Gemma 4 vision (ollama) et recherche de statut de vol
-- [ ] **Étape 4** — génération PDF
-- [ ] **Étape 5** — démo rejouable
-- [ ] **Étape 6** — évaluation chiffrée + writeup
+## Vérification
 
-Le graphe a été construit et validé **avant** tout branchement de source réelle : c'est la partie
-notée, et l'inverser garantit de passer la soirée à déboguer des réponses d'API.
+```bash
+.venv/bin/python -m unittest -v test_agent.py
+```
 
----
+Les 32 tests couvrent le routage, la normalisation des durées, les seuils, les
+tranches de distance, le remboursement séparé et la confidentialité des
+recherches. Ils vérifient également les schémas d'outils, le parsing de
+`tool_calls`, le retour `role=tool`, le rejet des fonctions ou arguments hors
+liste blanche et le fallback déterministe. Les cas de remboursement prouvent
+qu'un retard au départ d'au moins 5 heures sans choix explicite du passager
+déclenche une question, tandis qu'un voyage abandonné peut ouvrir un résultat
+conditionnel ou `likely`. Les appels Ollama doivent rester séquentiels pour
+obtenir des mesures de latence comparables.
 
-## Stack
+## Confidentialité et résilience
 
-Python 3.14 · [uv](https://docs.astral.sh/uv/) · `gemma4:12b` via [ollama](https://ollama.com) en local · PyMuPDF
+Le document, le nom et la référence de réservation sont traités par Ollama sur
+la machine. Gemma ne reçoit pour la sélection d'outils que le type d'incident,
+le trajet, les durées utiles et la compagnie. Les recherches SerpApi excluent
+le nom du passager et la référence. Sans clé, en cas de quota ou de panne
+réseau, les sources de référence sont affichées comme non vérifiées, le verdict
+reste conditionnel et aucun montant n'est affirmé dans la lettre.
 
-## Avertissement
+## Positionnement
 
-Les règles EU261 implémentées sont **simplifiées** pour un prototype. Les documents produits sont
-des projets de courrier à relire et signer avant envoi. **Ne constitue pas un conseil juridique.**
+Ce projet prépare un dossier que l'utilisateur contrôle ; il n'effectue ni
+recouvrement ni action en justice. Contrairement aux services gérés à
+commission, il conserve localement le document et prélève **0 %** d'une
+éventuelle indemnité.
+
+| Critère | Droit de Retard | AirHelp | Flightright |
+| --- | --- | --- | --- |
+| Modèle | Libre-service local | Recouvrement géré | Recouvrement géré |
+| Commission annoncée | 0 % | 35 % TTC | 27 % + TVA |
+| Supplément juridique | Aucun service juridique | 15 % TTC | 14 % selon le dossier |
+| Trace et mode hors ligne | Visibles | Non revendiqués | Non revendiqués |
+
+Sources : [frais AirHelp](https://www.airhelp.com/en-int/our-fees/),
+[fonctionnement d'AirHelp](https://www.airhelp.com/en-int/blog/how-to-use-airhelp-to-claim-flight-compensation/),
+[service Flightright](https://www.flightright.fr/blog/droit-aerien) et
+[conditions Flightright](https://www.flightright.fr/wp-content/uploads/sites/4/2021/03/Conditions-Ge%CC%81ne%CC%81rales_FRA.pdf).
+Ces services restent plus complets pour les relances et la représentation.
+
+## Limites
+
+- règles volontairement simplifiées pour les scénarios de démonstration ;
+- quatre aéroports référencés dans le calcul local ;
+- aucune vérification historique fiable d'un vol ou transporteur fictif ;
+- aucun envoi automatique de réclamation ;
+- RAG des procédures de compagnies prévu comme bonus, non requis pour la
+  démonstration principale.
